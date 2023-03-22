@@ -49,3 +49,4 @@ def load_images(metadata, image_path, resized=(256, 256)):
         raw_images[sample] = image
 
     return np.array(list(raw_images.values()))
+
