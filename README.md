@@ -1,2 +1,2 @@
-# X-ray Reports
-> X-ray images to text report generation
+# X-Ray Report
+> X-ray images to text report

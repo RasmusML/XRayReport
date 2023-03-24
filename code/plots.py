@@ -11,6 +11,29 @@ def plot_image(image):
     plt.axis('off')
 
 
+def plot_images(images, title=None, path=None):
+    n_cols = images.shape[0]
+    
+    fig, axs = plt.subplots(ncols=n_cols, figsize=(n_cols,1))
+    fig.subplots_adjust(wspace=0.05, hspace=0.05)
+
+    if title:
+        fig.subplots_adjust(top=0.75)
+        fig.suptitle(title)
+        
+    for c in range(n_cols):
+        ax = axs[c]
+
+        ax.imshow(images[c])
+        ax.set_yticks([])
+        ax.set_xticks([])
+
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
 def text_to_image(text, title, fontsize=20, wrap_width=50, textarea_width=512):
     # Measure the height of the text area
     textarea_height = 0
