@@ -11,6 +11,30 @@ def plot_image(image):
     plt.axis('off')
 
 
+def plot_images_2d(images, title=None, path=None):
+    n_rows = images.shape[0]
+    n_cols = images.shape[1]
+    
+    fig, axs = plt.subplots(ncols=n_cols, nrows=n_rows, figsize=(n_cols,n_rows))
+    fig.subplots_adjust(wspace=0.05, hspace=0.05)
+
+    if title:
+        fig.suptitle(title)
+    
+    for r in range(n_rows):
+        for c in range(n_cols):
+            ax = axs[r][c]
+
+            ax.imshow(images[r][c])
+            ax.set_yticks([])
+            ax.set_xticks([])
+
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
 def plot_images(images, title=None, path=None):
     n_cols = images.shape[0]
     
@@ -33,8 +57,7 @@ def plot_images(images, title=None, path=None):
     else:
         plt.show()
 
-
-def text_to_image(text, title, fontsize=20, wrap_width=50, textarea_width=512):
+def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512):
     # Measure the height of the text area
     textarea_height = 0
     title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", fontsize)
@@ -66,7 +89,7 @@ def text_to_image(text, title, fontsize=20, wrap_width=50, textarea_width=512):
     return img
 
 
-def plot_textimage_and_image(text_image, image):
+def merge_textimage_and_image(text_image, image):
     yBuffer = 10
     width = text_image.width
     height = image.height + text_image.height + yBuffer
@@ -75,15 +98,36 @@ def plot_textimage_and_image(text_image, image):
     combined_image.paste(text_image, (0, 0))
     combined_image.paste(image,(0, text_image.height + yBuffer))
 
+    return np.asarray(combined_image)
+
+def prepare_text_and_image(textbody, title, image):
+    text_image = text_to_image(textbody, title)
+    scaled_image = crop_and_scale(image, (text_image.width, text_image.width))
+    image = Image.fromarray(scaled_image)
+    combined_image = merge_textimage_and_image(text_image, image)
+    return combined_image
+
+
+def plot_text_and_image(textbody, title, image):
+    combined_image = prepare_text_and_image(textbody, title, image)
+
     plt.imshow(combined_image)
     plt.axis('off')
 
 
-def plot_text_and_image(textbody, title, image):
-    text_image = text_to_image(textbody, title)
+def plot_multiple_text_and_images(textbodies, shared_title, images):
+    n_cols = images.shape[0]
+    
+    scalar = 10
+    fig, axs = plt.subplots(ncols=n_cols, figsize=(scalar*n_cols,scalar))
+    fig.subplots_adjust(wspace=0, hspace=0)
 
-    scaled_image = crop_and_scale(image, (text_image.width, text_image.width))
-    image = Image.fromarray(scaled_image)
+    for c in range(n_cols):
+        ax = axs[c]
 
-    plot_textimage_and_image(text_image, image)
+        image = prepare_text_and_image(textbodies[c], shared_title, images[c])
+
+        ax.imshow(image)
+        ax.set_yticks([])
+        ax.set_xticks([])
 
