@@ -125,9 +125,8 @@ def plot_multiple_text_and_images(textbodies, shared_title, images):
     for c in range(n_cols):
         ax = axs[c]
 
-        image = prepare_text_and_image(textbodies[c], shared_title, images[c])
+        image = prepare_text_and_image(textbodies.iloc[c], shared_title, images[c])
 
         ax.imshow(image)
         ax.set_yticks([])
         ax.set_xticks([])
-
