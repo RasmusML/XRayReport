@@ -45,6 +45,7 @@ def load_images(metadata, image_path, resized=(256, 256)):
 
     for sample in metadata["image_name"]:
         image = load_png(os.path.join(image_path, sample))
+        image = image[..., 0]
         image = crop_and_scale(image, resized)
         raw_images[sample] = image
 

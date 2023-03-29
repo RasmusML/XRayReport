@@ -2,6 +2,16 @@ import os
 import numpy as np
 from PIL import Image
 import cv2
+import torch
+
+def fix_seed(seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    np.random.seed(seed)
 
 
 def count_files(path):
@@ -20,14 +30,14 @@ def load_png(path):
 
 def crop_center(img, cropXY):
     cropx, cropy = cropXY
-    y,x, _ = img.shape
+    y,x = img.shape
     startx = x // 2 - (cropx // 2)
     starty = y // 2 - (cropy // 2)
     return img[starty:starty+cropy, startx:startx+cropx]
 
 
 def crop_and_scale(img, cropXY):
-    y,x, _ = img.shape
+    y,x = img.shape
 
     dim = min(x, y)
     img = crop_center(img, (dim, dim))

@@ -7,7 +7,7 @@ from utils import crop_and_scale
 
 
 def plot_image(image):
-    plt.imshow(image)
+    plt.imshow(image, cmap='gray')
     plt.axis('off')
 
 
@@ -25,7 +25,7 @@ def plot_images_2d(images, title=None, path=None):
         for c in range(n_cols):
             ax = axs[r][c]
 
-            ax.imshow(images[r][c])
+            ax.imshow(images[r][c], cmap='gray')
             ax.set_yticks([])
             ax.set_xticks([])
 
@@ -48,7 +48,7 @@ def plot_images(images, title=None, path=None):
     for c in range(n_cols):
         ax = axs[c]
 
-        ax.imshow(images[c])
+        ax.imshow(images[c], cmap='gray')
         ax.set_yticks([])
         ax.set_xticks([])
 
