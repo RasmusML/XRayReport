@@ -2,6 +2,8 @@ dev.py
 tmp.ipynb
 raw/
 
+.vscode/
+
 models/
 runs/
 results/

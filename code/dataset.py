@@ -5,6 +5,11 @@ import os
 import numpy as np
 from PIL import Image
 
+from torch.utils.data import DataLoader, Dataset
+
+import spacy
+import stanza
+
 import logging
 
 from utils import *
@@ -51,3 +56,81 @@ def load_images(metadata, image_path, resized=(256, 256)):
 
     return np.array(list(raw_images.values()))
 
+
+def prepare_reports(metadata):
+    reports = metadata["findings"].astype(str) + "\n" + metadata["impression"].astype(str)
+    print(f"raw report length: {len(reports)}")
+
+    reports.replace("[N|n]one", "", regex=True, inplace=True)
+    reports = reports[reports != "\n"] # if both are None, then only "\n" remains
+    reports = reports.rename("report")
+    print(f"post-processing report length: {len(reports)}")
+
+    return reports
+
+
+#
+# prepare for the models
+#
+
+def stanza_tokenizer():
+    nlp = stanza.Pipeline(lang="en", processors="tokenize")
+    return lambda text: [token.text for sentence in nlp(text).sentences for token in sentence.tokens]
+
+
+def spacy_tokenizer():
+    nlp = spacy.load('en_core_web_lg')
+    return lambda text: [token.text for token in nlp(text)]
+
+
+def tokenize(text, tokenizer):
+    text = text.lower()
+    tokens = tokenizer(text)
+    return [token for token in tokens if token.isalpha()]
+
+
+def build_vocabulary(tokens):
+    return set(["[UNK]", "[PAD]", "[START]", "[END]", "."]) | set(tokens)
+
+
+def map_token_and_id(vocabulary):
+    stabil_vocabulary = list(vocabulary)
+    return {token: i for i, token in enumerate(stabil_vocabulary)}, {i: token for i, token in enumerate(stabil_vocabulary)}
+
+
+def map_token_and_id_fn(vocabulary):
+    token2id, id2token = map_token_and_id(vocabulary)
+    return lambda token: token2id[token] if token in token2id else token2id["[UNK]"], lambda id: id2token[id]
+
+
+class XRayDataset(Dataset):
+    def __init__(self, images, reports, token2id):
+        self.images = images
+        self.reports = reports
+        self.token2id = token2id
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx][None]
+        report = self.reports.values[idx]
+        report = ["[START]"] + report + ["[END]"]
+
+        report_length = len(report)
+        report_ids = [self.token2id(token) for token in report]
+
+        return image, report_ids, report_length
+
+
+def report_collate_fn(pad_id, input):
+    images, reports, report_lengths = zip(*input)
+
+    report_max_length = max(report_lengths)
+    padded_reports = [report + [pad_id] * (report_max_length - length) for report, length in zip(reports, report_lengths)]
+
+    t_images = torch.stack(list(images), dim=0)
+    t_reports = torch.tensor(padded_reports)
+    t_report_lengths = torch.tensor(report_lengths)
+
+    return t_images, t_reports, t_report_lengths

@@ -3,6 +3,17 @@ import numpy as np
 from PIL import Image
 import cv2
 import torch
+import pickle
+
+def save_dict(dictionary, file):
+    with open(file, "wb") as f:
+        pickle.dump(dictionary, f)
+
+
+def load_dict(file):
+    with open(file, 'rb') as f: 
+         return pickle.load(f)
+
 
 def fix_seed(seed=42):
     torch.manual_seed(seed)
@@ -43,3 +54,5 @@ def crop_and_scale(img, cropXY):
     img = crop_center(img, (dim, dim))
     
     return cv2.resize(img, cropXY)
+
+

@@ -130,3 +130,16 @@ def plot_multiple_text_and_images(textbodies, shared_title, images):
         ax.imshow(image)
         ax.set_yticks([])
         ax.set_xticks([])
+
+
+def plot_losses(train_losses, validation_losses):
+    fig, ax = plt.subplots(figsize=(8, 4))
+    epochs = np.arange(len(train_losses)) + 1
+    ax.plot(epochs, train_losses, label="train")
+    ax.plot(epochs, validation_losses, label="validation")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.set_title("Model Loss")
+    ax.legend()
+    ax.grid()
+    plt.show()
