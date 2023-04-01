@@ -6,6 +6,7 @@ from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from torchvision.models import vgg19
 
 import numpy as np
 
@@ -19,15 +20,27 @@ class XRayEncoder(nn.Module):
         super().__init__()
 
         self.image_net = nn.Sequential(
-            nn.Conv2d(1, 8, kernel_size=4, stride=4),
-            nn.LeakyReLU(0.1), # 64
-            nn.Conv2d(8, 16, kernel_size=4, stride=4),
-            nn.LeakyReLU(0.1), # 16
-            nn.Conv2d(16, 32, kernel_size=4, stride=4),
-            nn.LeakyReLU(0.1), # 4
-            nn.Conv2d(32, 64, kernel_size=4, stride=4),
-            nn.LeakyReLU(0.1), # 1
-            nn.Flatten()
+            nn.Conv2d(1, 8, kernel_size=3),
+            nn.MaxPool2d(2, 2),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(8, 16, kernel_size=3),
+            nn.MaxPool2d(2, 2),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(16, 32, kernel_size=3),
+            nn.MaxPool2d(2, 2),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(32, 64, kernel_size=3),
+            nn.MaxPool2d(2, 2),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(64, 128, kernel_size=3),
+            nn.MaxPool2d(2, 2),
+            nn.LeakyReLU(0.1),
+
+            nn.Flatten(),
         )
 
     def forward(self, images):
@@ -53,7 +66,7 @@ class XRayDecoder(nn.Module):
 
 
 class XRayBaseModel(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=64):
+    def __init__(self, vocabulary_size, hidden_size=3200):
         super().__init__()
 
         self.encoder = XRayEncoder()
@@ -145,6 +158,18 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
     result["train_losses"] = mean_train_losses
     result["validation_losses"] = mean_validation_losses
 
-    save_dict(result, os.path.join("results", model_name, "result.pkl"))
+    save_dict(os.path.join("results", model_name, "result.pkl"), result)
 
     torch.save(model.state_dict(), os.path.join("results", model_name, "model.pt"))
+
+
+class XRayVGG19Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.vgg19_model = vgg19(pretrained=True)
+
+    def forward(self, images):
+        expanded = images.expand(-1, 3, -1, -1)
+        return self.vgg19_model.features[:35](expanded) # last conv layer, similiar to the paper.
+

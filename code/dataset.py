@@ -14,6 +14,7 @@ import logging
 
 from utils import *
 
+
 def load_reports(path):
     reportFeatures = defaultdict(list)
 
