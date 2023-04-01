@@ -1,2 +1,2 @@
 # X-Ray Report
-> X-ray images to text reports
+> Generation of medical text reports based on chest X-ray images.

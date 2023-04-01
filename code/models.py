@@ -89,11 +89,13 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
     mean_validation_losses = []
 
     for t in range(epochs):
+        logging.info(f"Epoch {t}.")
+
         model.train()
 
         train_losses = []
 
-        for xrays, reports, report_lengths in train_dl:
+        for xrays, reports, report_lengths in tqdm(train_dl):
             xrays = xrays.to(device)
             reports = reports.to(device)
             report_lengths = report_lengths.to(device)

@@ -59,12 +59,12 @@ def load_images(metadata, image_path, resized=(256, 256)):
 
 def prepare_reports(metadata):
     reports = metadata["findings"].astype(str) + "\n" + metadata["impression"].astype(str)
-    print(f"raw report length: {len(reports)}")
+    logging.info(f"raw report length: {len(reports)}")
 
     reports.replace("[N|n]one", "", regex=True, inplace=True)
     reports = reports[reports != "\n"] # if both are None, then only "\n" remains
     reports = reports.rename("report")
-    print(f"post-processing report length: {len(reports)}")
+    logging.info(f"post-processing report length: {len(reports)}")
 
     return reports
 
@@ -114,7 +114,7 @@ class XRayDataset(Dataset):
 
     def __getitem__(self, idx):
         image = self.images[idx][None]
-        report = self.reports.values[idx]
+        report = self.reports.iloc[idx]
         report = ["[START]"] + report + ["[END]"]
 
         report_length = len(report)
@@ -134,3 +134,7 @@ def report_collate_fn(pad_id, input):
     t_report_lengths = torch.tensor(report_lengths)
 
     return t_images, t_reports, t_report_lengths
+
+
+def normalize_images(images):
+    return images.type(torch.float32) / 255.
