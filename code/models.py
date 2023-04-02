@@ -54,14 +54,12 @@ class XRayDecoder(nn.Module):
         self.embedding = nn.Embedding(output_size, hidden_size)
         self.gru = nn.GRU(hidden_size, hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=-1)
     
     def forward(self, input, context):
         output = self.embedding(input)
         output = F.relu(output)
         output, hidden = self.gru(output, context[None])
         output = self.out(output)
-        output = self.softmax(output)
         return output, hidden
 
 
@@ -76,6 +74,51 @@ class XRayBaseModel(nn.Module):
         context = self.encoder(images)
         output, _ = self.decoder(text, context)
         return output
+
+
+#
+# Playground
+#
+
+class XRayPlaygroundEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.image_net = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=4, stride=4),
+            nn.LeakyReLU(0.1),
+            
+            nn.Conv2d(8, 16, kernel_size=4, stride=4),
+            nn.LeakyReLU(0.1),
+            
+            nn.Conv2d(16, 32, kernel_size=2, stride=2),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(32, 64, kernel_size=3, stride=3, padding=1),
+            nn.LeakyReLU(0.1), # 64x7x7 -> 128x3x3
+
+            nn.Conv2d(64, 128, kernel_size=3, stride=3),
+            nn.LeakyReLU(0.1), # 64x7x7 -> 128x1x1
+
+            nn.Flatten(),
+        )
+
+    def forward(self, images):
+        return self.image_net(images)
+
+
+class XRayPlaygroundModel(nn.Module):
+    def __init__(self, vocabulary_size, hidden_size=128):
+        super().__init__()
+
+        self.encoder = XRayPlaygroundEncoder()
+        self.decoder = XRayDecoder(hidden_size, vocabulary_size)
+        
+    def forward(self, text, images):
+        context = self.encoder(images)
+        output, _ = self.decoder(text, context)
+        return output
+
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, learning_rate=0.01, epochs=30):
@@ -96,14 +139,12 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
 
     # hyperparameters
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
 
     mean_train_losses = []
     mean_validation_losses = []
 
     for t in range(epochs):
-        logging.info(f"Epoch {t}.")
-
         model.train()
 
         train_losses = []

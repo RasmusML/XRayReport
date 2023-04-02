@@ -9,6 +9,7 @@ import stanza
 import logging
 import argparse
 
+
 def main(args):
     logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
@@ -26,8 +27,8 @@ def main(args):
     
     reports = prepare_reports(metadata)
 
-    np_images = load_images(metadata, IMAGE_PATH, resized=(256, 256))
-    images = torch.tensor(np_images[reports.index])
+    images = load_images(metadata, IMAGE_PATH, resized=(256, 256))
+    images = images[reports.index]
     images = normalize_images(images)
 
     tokenizer = stanza_tokenizer()

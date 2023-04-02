@@ -51,11 +51,12 @@ def load_images(metadata, image_path, resized=(256, 256)):
 
     for sample in metadata["image_name"]:
         image = load_png(os.path.join(image_path, sample))
-        image = image[..., 0]
-        image = crop_and_scale(image, resized)
-        raw_images[sample] = image
+        raw_images[sample] = crop_and_scale(image[..., 0], resized)
 
-    return np.array(list(raw_images.values()))
+    np_images = np.array(list(raw_images.values()))
+    images = torch.tensor(np_images).type(torch.float32)
+
+    return images
 
 
 def prepare_reports(metadata):
@@ -139,3 +140,4 @@ def report_collate_fn(pad_id, input):
 
 def normalize_images(images):
     return images.type(torch.float32) / 255.
+
