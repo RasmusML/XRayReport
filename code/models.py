@@ -158,7 +158,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
     result["train_losses"] = mean_train_losses
     result["validation_losses"] = mean_validation_losses
 
-    save_dict(os.path.join("results", model_name, "result.pkl"), result)
+    save_dict(result, os.path.join("results", model_name, "result.pkl"))
 
     torch.save(model.state_dict(), os.path.join("results", model_name, "model.pt"))
 

@@ -57,15 +57,16 @@ def plot_images(images, title=None, path=None):
     else:
         plt.show()
 
-def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512):
+def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512, font="./data/arial.ttf"):
     # Measure the height of the text area
     textarea_height = 0
-    title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", fontsize)
+    title_font = ImageFont.truetype(font, fontsize)
     textarea_height += title_font.getbbox(title)[3]
 
     text_wrap = textwrap.wrap(text, width=wrap_width)
 
-    body_font = ImageFont.truetype("DejaVuSans.ttf", fontsize)
+    body_font = ImageFont.truetype(font, fontsize)
+    
     for line in text_wrap:
         textarea_height += body_font.getbbox(line)[3]
 
@@ -77,11 +78,13 @@ def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512):
     draw = ImageDraw.Draw(img)
     margin = offset = 0
 
-    title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", fontsize)
+    title_font = ImageFont.truetype(font, fontsize)
+    
     draw.text((margin, offset), title, font=title_font, fill="#000000")
     offset += title_font.getbbox(title)[3]
 
-    body_font = ImageFont.truetype("DejaVuSans.ttf", fontsize)
+    body_font = ImageFont.truetype(font, fontsize)
+    
     for line in text_wrap:
         draw.text((margin, offset), line, font=body_font, fill="#000000")
         offset += body_font.getbbox(line)[3]
