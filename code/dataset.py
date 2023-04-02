@@ -46,7 +46,7 @@ def load_reports(path):
     return pd.DataFrame(reportFeatures)
 
 
-def load_images(metadata, image_path, resized=(256, 256)):
+def load_images(metadata, image_path, resized=(224, 224)):
     raw_images = {}
 
     for sample in metadata["image_name"]:
@@ -86,13 +86,18 @@ def spacy_tokenizer():
 
 
 def tokenize(text, tokenizer):
+
+    def valid_token(token):
+        return token.isalpha() or token == "."
+
     text = text.lower()
     tokens = tokenizer(text)
-    return [token for token in tokens if token.isalpha()]
+
+    return [token for token in tokens if valid_token(token)]
 
 
 def build_vocabulary(tokens):
-    return set(["[UNK]", "[PAD]", "[START]", "[END]", "."]) | set(tokens)
+    return set(["[UNK]", "[PAD]", "[START]", "[END]"]) | set(tokens)
 
 
 def map_token_and_id(vocabulary):

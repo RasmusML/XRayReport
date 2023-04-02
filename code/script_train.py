@@ -25,12 +25,15 @@ def main(args):
     if args.size > 0:
         metadata = metadata[:args.size]
     
+    logging.info("loading reports...")
     reports = prepare_reports(metadata)
 
-    images = load_images(metadata, IMAGE_PATH, resized=(256, 256))
+    logging.info("loading images...")
+    images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
     images = images[reports.index]
     images = normalize_images(images)
 
+    logging.info("preprocessing...")
     tokenizer = stanza_tokenizer()
     tokenized_reports = reports.apply(lambda text : tokenize(text, tokenizer))
 
@@ -46,6 +49,7 @@ def main(args):
     model_name = "base"
     model = XRayBaseModel(len(vocabulary))
 
+    logging.info("training...")
     train(model_name, model, vocabulary, train_dataset, validation_dataset)
 
 

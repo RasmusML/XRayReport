@@ -76,6 +76,17 @@ class XRayBaseModel(nn.Module):
         return output
 
 
+class XRayVGG19Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.vgg19_model = vgg19(pretrained=True)
+
+    def forward(self, images):
+        expanded = images.expand(-1, 3, -1, -1)
+        return self.vgg19_model.features[:35](expanded) # last conv layer, similiar to the paper.
+
+
 #
 # Playground
 #
@@ -202,15 +213,4 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
     save_dict(result, os.path.join("results", model_name, "result.pkl"))
 
     torch.save(model.state_dict(), os.path.join("results", model_name, "model.pt"))
-
-
-class XRayVGG19Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.vgg19_model = vgg19(pretrained=True)
-
-    def forward(self, images):
-        expanded = images.expand(-1, 3, -1, -1)
-        return self.vgg19_model.features[:35](expanded) # last conv layer, similiar to the paper.
 
