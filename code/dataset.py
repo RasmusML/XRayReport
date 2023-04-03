@@ -64,7 +64,9 @@ def prepare_reports(metadata):
     logging.info(f"raw report length: {len(reports)}")
 
     reports.replace("[N|n]one", "", regex=True, inplace=True)
+    #reports.replace("XXXX", "", regex=True, inplace=True)
     reports = reports[reports != "\n"] # if both are None, then only "\n" remains
+    
     reports = reports.rename("report")
     logging.info(f"post-processing report length: {len(reports)}")
 

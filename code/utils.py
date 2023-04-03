@@ -56,3 +56,6 @@ def crop_and_scale(img, cropXY):
     return cv2.resize(img, cropXY)
 
 
+def tokens_to_text(tokens):
+    return " ".join(tokens).replace(" .", ".")
+
