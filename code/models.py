@@ -157,7 +157,7 @@ class XRayVGG19Encoder(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model, dropout=0.1, max_len=1000):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -205,7 +205,7 @@ class XRayViTDecoder(nn.Module):
     def __init__(self, vocabulary_size, hidden_size=768):
         super().__init__()
 
-        self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=1000)
+        self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
         self.embedding = nn.Embedding(vocabulary_size, hidden_size)
         self.decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size, nhead=4, batch_first=True)
         self.linear = nn.Linear(hidden_size, vocabulary_size)
@@ -249,14 +249,14 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     validation_dl = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # hyperparameters
-    #optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
+    #optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
 
     mean_train_losses = []
     mean_validation_losses = []
 
-    save_model_every = 10
+    save_model_every = 100
 
     for t in range(epochs):
         model.train()
