@@ -106,7 +106,7 @@ def merge_textimage_and_image(text_image, image):
 def prepare_text_and_image(textbody, title, image):
     text_image = text_to_image(textbody, title)
     scaled_image = crop_and_scale(image, (text_image.width, text_image.width))
-    image = Image.fromarray(scaled_image)
+    image = Image.fromarray(scaled_image * 255.)
     combined_image = merge_textimage_and_image(text_image, image)
     return combined_image
 

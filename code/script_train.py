@@ -39,15 +39,23 @@ def main(args):
 
     vocabulary = build_vocabulary([token for tokens in tokenized_reports for token in tokens])
     token2id, _ = map_token_and_id_fn(vocabulary)
+    
+    model_name = args.model
+    
+    if args.model == "vit":
+        model = XRayViTModel(len(vocabulary))
+    elif args.model == "base":
+        model = XRayBaseModel(len(vocabulary))
+    else:
+        raise ValueError(f"model {args.model} not supported")
+
+    processed_images = model.encoder.preprocess(images)
 
     train_split = .9
     train_size = int(len(images) * train_split)
 
-    train_dataset = XRayDataset(images[:train_size], tokenized_reports[:train_size], token2id)
-    validation_dataset = XRayDataset(images[train_size:], tokenized_reports[train_size:], token2id)
-
-    model_name = "base"
-    model = XRayBaseModel(len(vocabulary))
+    train_dataset = XRayDataset(processed_images[:train_size], tokenized_reports[:train_size], token2id)
+    validation_dataset = XRayDataset(processed_images[train_size:], tokenized_reports[train_size:], token2id)
 
     logging.info("training...")
     train(model_name, model, vocabulary, train_dataset, validation_dataset)
@@ -56,6 +64,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--size", default=-1, type=int)
+    parser.add_argument("--model", default="vit", choices=["vit", "base"])
 
     args = parser.parse_args()
 

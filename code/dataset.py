@@ -53,10 +53,10 @@ def load_images(metadata, image_path, resized=(224, 224)):
         image = load_png(os.path.join(image_path, sample))
         raw_images[sample] = crop_and_scale(image[..., 0], resized)
 
-    np_images = np.array(list(raw_images.values()))
-    images = torch.tensor(np_images).type(torch.float32)
+    images = torch.tensor(np.array(list(raw_images.values())), dtype=torch.float32)
+    normalized_images = normalize_images(images)
 
-    return images
+    return normalized_images
 
 
 def prepare_reports(metadata):
@@ -122,7 +122,7 @@ class XRayDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, idx):
-        image = self.images[idx][None]
+        image = self.images[idx]
         report = self.reports.iloc[idx]
         report = ["[START]"] + report + ["[END]"]
 
