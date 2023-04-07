@@ -45,9 +45,8 @@ class XRayPlaygroundEncoder(nn.Module):
     def forward(self, images):
         return self.image_net(images)
 
-
     def preprocess(self, images):
-        pass
+        return images.unsqueeze(1)
 
 
 class XRayPlaygroundModel(nn.Module):
@@ -112,11 +111,11 @@ class XRayDecoder(nn.Module):
         self.out = nn.Linear(hidden_size, output_size)
     
     def forward(self, input, context):
-        output = self.embedding(input)
-        output = F.relu(output)
-        output, hidden = self.gru(output, context[None])
-        output = self.out(output)
-        return output, hidden
+        x = self.embedding(input)
+        x = F.relu(x)
+        x, h = self.gru(x, context[None])
+        x = self.out(x)
+        return x, h
 
 
 class XRayBaseModel(nn.Module):
@@ -128,8 +127,8 @@ class XRayBaseModel(nn.Module):
         
     def forward(self, text, images):
         context = self.encoder(images)
-        output, _ = self.decoder(text, context)
-        return output
+        x, _ = self.decoder(text, context)
+        return x
 
 #
 # Model 2, @TODO: add decoder
@@ -145,11 +144,11 @@ class XRayVGG19Encoder(nn.Module):
         self.encoder = vgg19(weights=VGG19_Weights(weights))
 
     def forward(self, images):
-        expanded = images.unsqueeze(1).expand(-1, 3, -1, -1)
-        return self.encoder.features[:35](expanded) # last conv layer, similiar to the paper.
+        return self.encoder.features[:35](images) # last conv layer, similiar to the paper.
     
     def preprocess(self, images):
-        return self.preprocess_fn(images)
+        expanded = images.unsqueeze(1).expand(-1, 3, -1, -1)
+        return self.preprocess_fn(expanded)
 
 
 #
@@ -236,7 +235,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     
     os.makedirs(os.path.join("results", model_name), exist_ok=True)
 
-    token2id, _ = map_token_and_id_fn(vocabulary) # @TODO: take token2id as arguments
+    token2id, _ = map_token_and_id_fn(vocabulary)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -251,7 +250,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
 
     # hyperparameters
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
 
     mean_train_losses = []
     mean_validation_losses = []
@@ -269,8 +268,8 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
             y_pred = model(reports, xrays)
 
             # Since a LM predicts the next token, we need shift the tokens. Tokens "!   !" should be ignored.
-            # y_true: !Start!   <hello>   <sailor>  <!>      <[End]>
             # y_est:  <hello>   <sailor>  <!>       <[END]>  !misc!
+            # y_true: !Start!   <hello>   <sailor>  <!>      <[End]>
             y_pred_align = y_pred[:,:-1,:]
             y_true_align = reports[:,1:]
 

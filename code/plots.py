@@ -57,15 +57,15 @@ def plot_images(images, title=None, path=None):
     else:
         plt.show()
 
-def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512, font="./data/arial.ttf"):
+def text_to_image(text, title, text_fontsize=22, title_font_size=24, wrap_width=45, textarea_width=512, font="./data/arial.ttf"):
     # Measure the height of the text area
     textarea_height = 0
-    title_font = ImageFont.truetype(font, fontsize)
+    title_font = ImageFont.truetype(font, title_font_size)
     textarea_height += title_font.getbbox(title)[3]
 
     text_wrap = textwrap.wrap(text, width=wrap_width)
 
-    body_font = ImageFont.truetype(font, fontsize)
+    body_font = ImageFont.truetype(font, text_fontsize)
     
     for line in text_wrap:
         textarea_height += body_font.getbbox(line)[3]
@@ -78,12 +78,12 @@ def text_to_image(text, title, fontsize=22, wrap_width=45, textarea_width=512, f
     draw = ImageDraw.Draw(img)
     margin = offset = 0
 
-    title_font = ImageFont.truetype(font, fontsize)
+    title_font = ImageFont.truetype(font, title_font_size)
     
     draw.text((margin, offset), title, font=title_font, fill="#000000")
     offset += title_font.getbbox(title)[3]
 
-    body_font = ImageFont.truetype(font, fontsize)
+    body_font = ImageFont.truetype(font, text_fontsize)
     
     for line in text_wrap:
         draw.text((margin, offset), line, font=body_font, fill="#000000")
