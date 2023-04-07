@@ -231,10 +231,12 @@ class XRayViTModel(nn.Module):
         return output
 
 
-def train(model_name, model, vocabulary, train_dataset, validation_dataset, learning_rate=0.01, epochs=30):
+def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
+          epochs, lr, batch_size, weight_decay):
+    
     os.makedirs(os.path.join("results", model_name), exist_ok=True)
 
-    token2id, id2token = map_token_and_id_fn(vocabulary) # @TODO: take token2id as arguments
+    token2id, _ = map_token_and_id_fn(vocabulary) # @TODO: take token2id as arguments
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -244,11 +246,11 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset, lear
     # prepare dataloaders
     collate_fn = lambda input: report_collate_fn(token2id("[PAD]"), input)
 
-    train_dl = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn)
-    validation_dl = DataLoader(validation_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn)
+    train_dl = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    validation_dl = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # hyperparameters
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
 
     mean_train_losses = []

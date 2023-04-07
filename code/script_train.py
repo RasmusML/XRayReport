@@ -8,6 +8,8 @@ from models import *
 import stanza
 import logging
 import argparse
+import os
+import yaml
 
 
 def main(args):
@@ -58,14 +60,29 @@ def main(args):
     validation_dataset = XRayDataset(processed_images[train_size:], tokenized_reports[train_size:], token2id)
 
     logging.info("training...")
-    train(model_name, model, vocabulary, train_dataset, validation_dataset)
+    train(model_name, model, vocabulary, train_dataset, validation_dataset, args.epochs, args.lr, args.batch_size, args.weight_decay)
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description=__doc__)
+    
+    parser.add_argument("--model", choices=["vit", "base"])
     parser.add_argument("--size", default=-1, type=int)
-    parser.add_argument("--model", default="vit", choices=["vit", "base"])
+    parser.add_argument("--epochs", default=50)
+    parser.add_argument("--batch_size", default=64)
+    parser.add_argument("--lr", default=0.1)
+    parser.add_argument("--weight_decay", default=0.1)
+    
+    parser.add_argument("--config")
 
     args = parser.parse_args()
+
+    # override arguments with config file
+    if args.config:
+        opt = yaml.load(open(args.config), Loader=yaml.FullLoader)
+
+        for k, v in opt.items():
+            setattr(args, k, v)
 
     main(args)
