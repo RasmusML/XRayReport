@@ -1,6 +1,6 @@
 model: vit
 #size: 5
-epochs: 10
+epochs: 50
 lr: 0.001
 batch_size: 128
 weight_decay: 0.001

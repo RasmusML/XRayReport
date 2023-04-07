@@ -255,6 +255,8 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     mean_train_losses = []
     mean_validation_losses = []
 
+    save_model_every = 10
+
     for t in range(epochs):
         model.train()
 
@@ -305,6 +307,9 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
         mean_validation_losses.append(mean_validation_loss)
 
         print(f"Epoch {t+1} train loss: {mean_train_loss:.3f}, validation loss: {mean_validation_loss:.3f}")
+
+        if t % save_model_every == 0:
+            torch.save(model.state_dict(), os.path.join("results", model_name, f"model_{t}.pt"))
     
 
     result["train_losses"] = mean_train_losses
