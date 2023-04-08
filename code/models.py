@@ -254,10 +254,10 @@ class XRayViTDecoder(nn.Module):
     def forward(self, input, context):
         x = self.embedding(input)
         x = self.positional_encoding(x)
-        x = self.decoder_layer(x, context, memory_is_causal=True)
+        x = self.decoder_layer(x, context, tgt_is_casual=True)
         return self.linear(x)
 
-
+    
 class XRayViTModel(nn.Module):
     def __init__(self, vocabulary_size, hidden_size=768):
         super().__init__()

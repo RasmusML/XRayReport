@@ -31,8 +31,7 @@ def main(args):
     reports = prepare_reports(metadata)
 
     logging.info("loading images...")
-    images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
-    images = images[reports.index]
+    images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports.index]
 
     logging.info("preprocessing...")
     tokenizer = stanza_tokenizer()
@@ -64,7 +63,8 @@ def main(args):
 
     logging.info("training...")
     train(model_name, model, vocabulary, train_dataset, validation_dataset, args.epochs, args.lr, args.batch_size, args.weight_decay)
-
+    
+    logging.info("evaluating...")
     result_path = os.path.join("results", model_name, "result.pkl")
     result = load_dict(result_path)
     result["test_loss"] = evaluate(model, test_dataset, token2id)
@@ -94,3 +94,4 @@ if __name__ == "__main__":
             setattr(args, k, v)
 
     main(args)
+
