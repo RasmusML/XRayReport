@@ -60,6 +60,45 @@ class XRayPlaygroundModel(nn.Module):
         context = self.encoder(images)
         output, _ = self.decoder(text, context)
         return output
+    
+    def sample(self, image, token2id, id2token, max_length=200, sample_type="random"):
+        tokens = []
+
+        with torch.no_grad():
+            self.eval()
+
+            text_start = torch.tensor(token2id("[START]"))[None,None]
+            image = image[None]
+
+            input = text_start
+            context = self.encoder(image)
+
+            for i in range(max_length):
+                output, hidden = self.decoder(input, context)
+                output = output[0]
+
+                if sample_type == "greedy":
+                    token_id = output.argmax(dim=-1)
+                elif sample_type == "random":
+                    probs = F.softmax(output[0], dim=-1)
+                    probs = probs.numpy().astype('float64')
+                    probs /= np.sum(probs)
+                    select = np.random.choice(len(output[0]), p=probs)
+                    token_id = torch.tensor([select])
+                else:
+                    raise Exception("invalid strategy")
+
+                token = id2token(token_id.item())
+
+                if token == "[END]":
+                    break
+
+                tokens.append(token)
+                
+                input = token_id[None]
+                context = hidden[0]
+
+        return tokens
 
 
 
@@ -129,6 +168,8 @@ class XRayBaseModel(nn.Module):
         context = self.encoder(images)
         x, _ = self.decoder(text, context)
         return x
+    
+    
 
 #
 # Model 2, @TODO: add decoder
@@ -207,7 +248,7 @@ class XRayViTDecoder(nn.Module):
 
         self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
         self.embedding = nn.Embedding(vocabulary_size, hidden_size)
-        self.decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size, nhead=4, batch_first=True)
+        self.decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
         self.linear = nn.Linear(hidden_size, vocabulary_size)
 
     def forward(self, input, context):
@@ -228,6 +269,45 @@ class XRayViTModel(nn.Module):
         context = self.encoder(images)
         output = self.decoder(text, context)
         return output
+    
+    def sample(self, image, token2id, id2token, max_length=200, sample_type="greedy"):
+        tokens = []
+        probs = []
+
+        token_ids = torch.zeros(max_length+1, dtype=torch.long)
+
+        with torch.no_grad():
+            self.eval()
+
+            token_ids[0] = torch.tensor(token2id("[START]"))
+            context = self.encoder(image[None])
+
+            for i in range(1, max_length+1):
+                input = token_ids[:i][None]
+                output = self.decoder(input, context)
+                output = output[0, -1] # batch size 1, last token
+
+                p = F.softmax(output, dim=-1).numpy().astype(np.float64)
+                p /= np.sum(p)
+
+                if sample_type == "greedy":
+                    token_id = output.argmax(dim=-1)
+                elif sample_type == "random":
+                    token_id = torch.tensor(np.random.choice(len(output), p=p))
+                else:
+                    raise Exception("invalid strategy")
+
+                token = id2token(token_id.item())
+
+                if token == "[END]":
+                    break
+
+                tokens.append(token)
+                probs.append(p[token_id])
+
+                token_ids[i] = token_id
+
+        return tokens, probs
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
