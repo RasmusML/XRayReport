@@ -14,6 +14,7 @@ import numpy as np
 
 from utils import save_dict
 from dataset import *
+import patched_transformer as pm
 
 #
 # Model 0
@@ -248,16 +249,16 @@ class XRayViTDecoder(nn.Module):
 
         self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
         self.embedding = nn.Embedding(vocabulary_size, hidden_size)
-        self.decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
+        self.decoder_layer = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
         self.linear = nn.Linear(hidden_size, vocabulary_size)
 
     def forward(self, input, context):
         x = self.embedding(input)
         x = self.positional_encoding(x)
-        x = self.decoder_layer(x, context, tgt_is_casual=True)
+        x = self.decoder_layer(x, context, tgt_is_causal=True)
         return self.linear(x)
 
-    
+
 class XRayViTModel(nn.Module):
     def __init__(self, vocabulary_size, hidden_size=768):
         super().__init__()
@@ -308,8 +309,7 @@ class XRayViTModel(nn.Module):
                 token_ids[i] = token_id
 
         return tokens #, probs
-
-
+    
 #
 # training
 #

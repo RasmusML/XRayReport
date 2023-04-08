@@ -59,3 +59,10 @@ def crop_and_scale(img, cropXY):
 def tokens_to_text(tokens):
     return " ".join(tokens).replace(" .", ".")
 
+
+def create_image_attention_mask(attention_weights, image_size, grid_size, interpolation=cv2.INTER_NEAREST):
+    return cv2.resize(attention_weights.reshape(grid_size), image_size, interpolation=interpolation)
+
+
+def create_avg_image_attention_mask(attention_weights, image_size, grid_size, interpolation=cv2.INTER_NEAREST):
+    return np.sum([create_image_attention_mask(weights, image_size, grid_size, interpolation=interpolation) for weights in attention_weights], axis=0) / len(attention_weights)
