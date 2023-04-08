@@ -307,8 +307,12 @@ class XRayViTModel(nn.Module):
 
                 token_ids[i] = token_id
 
-        return tokens, probs
+        return tokens #, probs
 
+
+#
+# training
+#
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
           epochs, lr, batch_size, weight_decay):
@@ -326,22 +330,21 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     collate_fn = lambda input: report_collate_fn(token2id("[PAD]"), input)
 
     train_dl = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    validation_dl = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # hyperparameters
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
     #optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
 
-    mean_train_losses = []
-    mean_validation_losses = []
+    train_losses = []
+    validation_losses = []
 
-    save_model_every = 100
+    save_model_every = 200
 
     for t in range(epochs):
         model.train()
 
-        train_losses = []
+        batch_train_losses = []
 
         for xrays, reports, report_lengths in tqdm(train_dl):
             xrays = xrays.to(device)
@@ -362,45 +365,53 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
             loss.backward()
             optimizer.step()
 
-            train_losses.append(loss.detach().cpu().numpy())
+            batch_train_losses.append(loss.detach().cpu().numpy())
 
+        train_loss = np.mean(batch_train_losses)
+        train_losses.append(train_loss)
 
-        with torch.no_grad():
-            model.eval()
+        validation_loss = evaluate(model, validation_dataset, token2id)
+        validation_losses.append(validation_loss)
 
-            validation_losses = []
-
-            for xrays, reports, report_lengths in validation_dl:
-                xrays = xrays.to(device)
-                reports = reports.to(device)
-                report_lengths = report_lengths.to(device)
-
-                y_pred = model(reports, xrays)
-
-                y_pred_align = y_pred[:,:-1,:]
-                y_true_align = reports[:,1:]
-
-                loss = criterion(y_pred_align.flatten(end_dim=1), y_true_align.flatten())
-
-                validation_losses.append(loss.detach().cpu().numpy())
-
-
-        mean_train_loss = np.mean(train_losses)
-        mean_train_losses.append(mean_train_loss)
-
-        mean_validation_loss = np.mean(validation_losses)
-        mean_validation_losses.append(mean_validation_loss)
-
-        print(f"Epoch {t+1} train loss: {mean_train_loss:.3f}, validation loss: {mean_validation_loss:.3f}")
+        print(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
         if t % save_model_every == 0:
             torch.save(model.state_dict(), os.path.join("results", model_name, f"model_{t}.pt"))
     
 
-    result["train_losses"] = mean_train_losses
-    result["validation_losses"] = mean_validation_losses
+    result["train_losses"] = train_losses
+    result["validation_losses"] = validation_losses
 
     save_dict(result, os.path.join("results", model_name, "result.pkl"))
 
     torch.save(model.state_dict(), os.path.join("results", model_name, "model.pt"))
 
+
+def evaluate(model, test_dataset, token2id, batch_size=32):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #model = model.to(device)
+
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
+
+    collate_fn = lambda input: report_collate_fn(token2id("[PAD]"), input)
+    test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+
+    with torch.no_grad():
+        model.eval()
+
+        batch_test_losses = []
+
+        for xrays, reports, report_lengths in tqdm(test_dl):
+            xrays = xrays.to(device)
+            reports = reports.to(device)
+            report_lengths = report_lengths.to(device)
+
+            y_pred = model(reports, xrays)
+
+            y_pred_align = y_pred[:,:-1,:]
+            y_true_align = reports[:,1:]
+
+            loss = criterion(y_pred_align.flatten(end_dim=1), y_true_align.flatten())
+            batch_test_losses.append(loss.detach().cpu().numpy())
+
+    return np.mean(batch_test_losses)

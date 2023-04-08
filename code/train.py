@@ -33,7 +33,6 @@ def main(args):
     logging.info("loading images...")
     images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
     images = images[reports.index]
-    images = normalize_images(images)
 
     logging.info("preprocessing...")
     tokenizer = stanza_tokenizer()
@@ -53,14 +52,23 @@ def main(args):
 
     processed_images = model.encoder.preprocess(images)
 
-    train_split = .9
-    train_size = int(len(images) * train_split)
+    train_test_split = .9
+    train_validation_split = .9
+
+    total_train_size = int(len(images) * train_test_split)
+    train_size = int(total_train_size * train_validation_split)
 
     train_dataset = XRayDataset(processed_images[:train_size], tokenized_reports[:train_size], token2id)
-    validation_dataset = XRayDataset(processed_images[train_size:], tokenized_reports[train_size:], token2id)
+    validation_dataset = XRayDataset(processed_images[train_size:total_train_size], tokenized_reports[train_size:total_train_size], token2id)
+    test_dataset = XRayDataset(processed_images[total_train_size:], tokenized_reports[total_train_size:], token2id)
 
     logging.info("training...")
     train(model_name, model, vocabulary, train_dataset, validation_dataset, args.epochs, args.lr, args.batch_size, args.weight_decay)
+
+    result_path = os.path.join("results", model_name, "result.pkl")
+    result = load_dict(result_path)
+    result["test_loss"] = evaluate(model, test_dataset, token2id)
+    save_dict(result, result_path)
 
 
 if __name__ == "__main__":
