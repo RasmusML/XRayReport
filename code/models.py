@@ -172,6 +172,47 @@ class XRayBaseModel(nn.Module):
         x, _ = self.decoder(text, context)
         return x
     
+    def sample(self, image, token2id, id2token, max_length=200, sample_type="prob"):
+        tokens = []
+        probs = []
+
+        with torch.no_grad():
+            self.eval()
+
+            text_start = torch.tensor(token2id("[START]"))[None,None]
+            image = image[None]
+
+            input = text_start
+            context = self.encoder(image)
+
+            for i in range(max_length):
+                output, hidden = self.decoder(input, context)
+                output = output[0, -1]
+
+                p = F.softmax(output, dim=-1)
+                p = p.numpy().astype('float64')
+                p /= np.sum(p)
+                
+                if sample_type == "greedy":
+                    token_id = output.argmax(dim=-1)
+                elif sample_type == "prob":
+                    token_id = torch.tensor(np.random.choice(len(output), p=p))
+                else:
+                    raise Exception("invalid strategy")
+
+                token = id2token(token_id.item())
+
+                if token == "[END]":
+                    break
+
+                tokens.append(token)
+                probs.append(p[token_id])
+                
+                input = token_id[None,None]
+                context = hidden[0]
+
+        return tokens, probs
+    
     
 
 #
@@ -275,18 +316,18 @@ class XRayViTDecoder(nn.Module):
 
 
 class XRayViTModel(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768):
+    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=5):
         super().__init__()
 
         self.encoder = XRayViTEncoder()
-        self.decoder = XRayViTDecoder(vocabulary_size, hidden_size)
+        self.decoder = XRayViTDecoder(vocabulary_size, hidden_size, num_transformer_layers=num_transformer_layers)
         
     def forward(self, text, images):
         context = self.encoder(images)
         output = self.decoder(text, context)
         return output
     
-    def sample(self, image, token2id, id2token, max_length=200, sample_type="greedy"):
+    def sample(self, image, token2id, id2token, max_length=200, sample_type="prob"):
         tokens = []
         probs = []
 

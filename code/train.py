@@ -46,6 +46,8 @@ def main(args):
         model = XRayViTModel(len(vocabulary))
     elif args.model == "base":
         model = XRayBaseModel(len(vocabulary))
+    elif args.model == "playground":
+        model = XRayPlaygroundModel(len(vocabulary))
     else:
         raise ValueError(f"model {args.model} not supported")
 
