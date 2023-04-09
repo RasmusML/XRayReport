@@ -62,8 +62,9 @@ class XRayPlaygroundModel(nn.Module):
         output, _ = self.decoder(text, context)
         return output
     
-    def sample(self, image, token2id, id2token, max_length=200, sample_type="random"):
+    def sample(self, image, token2id, id2token, max_length=200, sample_type="prob"):
         tokens = []
+        probs = []
 
         with torch.no_grad():
             self.eval()
@@ -76,16 +77,16 @@ class XRayPlaygroundModel(nn.Module):
 
             for i in range(max_length):
                 output, hidden = self.decoder(input, context)
-                output = output[0]
+                output = output[0, -1]
 
+                p = F.softmax(output, dim=-1)
+                p = p.numpy().astype('float64')
+                p /= np.sum(p)
+                
                 if sample_type == "greedy":
                     token_id = output.argmax(dim=-1)
-                elif sample_type == "random":
-                    probs = F.softmax(output[0], dim=-1)
-                    probs = probs.numpy().astype('float64')
-                    probs /= np.sum(probs)
-                    select = np.random.choice(len(output[0]), p=probs)
-                    token_id = torch.tensor([select])
+                elif sample_type == "prob":
+                    token_id = torch.tensor(np.random.choice(len(output), p=p))
                 else:
                     raise Exception("invalid strategy")
 
@@ -95,11 +96,12 @@ class XRayPlaygroundModel(nn.Module):
                     break
 
                 tokens.append(token)
+                probs.append(p[token_id])
                 
-                input = token_id[None]
+                input = token_id[None,None]
                 context = hidden[0]
 
-        return tokens
+        return tokens, probs
 
 
 
@@ -244,18 +246,31 @@ class XRayViTEncoder(nn.Module):
 
 
 class XRayViTDecoder(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768):
+    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=5):
         super().__init__()
+
+        assert num_transformer_layers >= 0
+        
+        self.num_transformer_layers = num_transformer_layers
 
         self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
         self.embedding = nn.Embedding(vocabulary_size, hidden_size)
-        self.decoder_layer = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
+        self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
+        
+        if num_transformer_layers > 1:
+            self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
+            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, num_transformer_layers - 1)
+
         self.linear = nn.Linear(hidden_size, vocabulary_size)
 
     def forward(self, input, context):
         x = self.embedding(input)
         x = self.positional_encoding(x)
-        x = self.decoder_layer(x, context, tgt_is_causal=True)
+        x = self.decoder_layer1(x, context, tgt_is_causal=True)
+
+        if self.num_transformer_layers > 1:
+            x = self.decoder_layerN(x, context)
+
         return self.linear(x)
 
 
@@ -293,7 +308,7 @@ class XRayViTModel(nn.Module):
 
                 if sample_type == "greedy":
                     token_id = output.argmax(dim=-1)
-                elif sample_type == "random":
+                elif sample_type == "prob":
                     token_id = torch.tensor(np.random.choice(len(output), p=p))
                 else:
                     raise Exception("invalid strategy")
@@ -308,7 +323,7 @@ class XRayViTModel(nn.Module):
 
                 token_ids[i] = token_id
 
-        return tokens #, probs
+        return tokens, probs
     
 #
 # training
