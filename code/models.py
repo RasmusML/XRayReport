@@ -265,8 +265,7 @@ class CheXNetEncoder(nn.Module):
         x = self.avgpool(x)
         return x.squeeze()
 
-
-    def preprocess(self, xrays, batch_size=16):
+    def preprocess(self, xrays, batch_size=4):
         xrays = xrays.unsqueeze(1).expand(-1, 3, -1, -1)
         xrays = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(xrays)
 
@@ -274,9 +273,11 @@ class CheXNetEncoder(nn.Module):
 
         with torch.no_grad():
             for i in range(0, xrays.shape[0], batch_size):
+                logging.info(f"processing images: {i}/{xrays.shape[0]}")
                 start = i
                 end = min((i+1) * batch_size, xrays.shape[0])
-                result[start:end] = self.forward(xrays[start:end])
+                processed = self.forward(xrays[start:end])
+                result[start:end] = processed.cpu()
 
         return result
 
@@ -284,8 +285,6 @@ class CheXNetEncoder(nn.Module):
 class CheXNetBaseNet(nn.Module):
     def __init__(self, word_embeddings, hidden_size=256):
         super().__init__()
-
-        self.encoder = CheXNetEncoder()
 
         self.linear1 = nn.Linear(1024, hidden_size)
 
