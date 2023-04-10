@@ -201,7 +201,7 @@ class XRayViTEncoder(nn.Module):
 
 
 class XRayViTDecoder(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=5):
+    def __init__(self, vocabulary_size, hidden_size, num_transformer_layers):
         super().__init__()
 
         assert num_transformer_layers >= 0
@@ -230,7 +230,7 @@ class XRayViTDecoder(nn.Module):
 
 
 class XRayViTModel(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=9):
+    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=5):
         super().__init__()
 
         self.encoder = XRayViTEncoder()
