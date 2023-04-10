@@ -275,7 +275,7 @@ class CheXNetEncoder(nn.Module):
             for i in range(0, xrays.shape[0], batch_size):
                 logging.info(f"processing images: {i}/{xrays.shape[0]}")
                 start = i
-                end = min((i+1) * batch_size, xrays.shape[0])
+                end = min(start + batch_size, xrays.shape[0])
                 processed = self.forward(xrays[start:end])
                 result[start:end] = processed.cpu()
 
