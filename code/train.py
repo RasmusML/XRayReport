@@ -38,7 +38,7 @@ def main(args):
     tokenized_reports = reports.apply(lambda text : tokenize(text, tokenizer))
 
     vocabulary = build_vocabulary([token for tokens in tokenized_reports for token in tokens])
-    token2id, _ = map_token_and_id_fn(vocabulary)
+    token2id, _ = map_token_and_id(vocabulary)
     
     model_name = args.model
     
@@ -48,6 +48,10 @@ def main(args):
         model = XRayBaseModel(len(vocabulary))
     elif args.model == "playground":
         model = XRayPlaygroundModel(len(vocabulary))
+    elif args.model == "chex":
+        glove_vector = download_glove()
+        word_embeddings = get_word_embeddings(token2id, glove_vector)
+        model = CheXNetBaseNet(word_embeddings)
     else:
         raise ValueError(f"model {args.model} not supported")
 

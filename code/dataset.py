@@ -21,7 +21,7 @@ def load_reports(path):
     filenames = get_filenames(path)
     logging.info(f"found {len(filenames)} reports.")
 
-    for filename in filenames:
+    for i, filename in enumerate(filenames):
         tree = ET.parse(os.path.join(path, filename))
         root = tree.getroot()
 
@@ -37,6 +37,7 @@ def load_reports(path):
         parentImageTags = root.findall("parentImage")
 
         for parentImageTag in parentImageTags:
+            reportFeatures["patient_id"].append(i)
             reportFeatures["image_name"].append(parentImageTag.attrib["id"] + ".png")
 
             for reportCategory in abstractTag:
@@ -90,7 +91,7 @@ def spacy_tokenizer():
 def tokenize(text, tokenizer):
 
     def valid_token(token):
-        return token.isalpha() or token == "."
+        return (token.isalpha() or token == ".") and (not token == "xxxx")
 
     text = text.lower()
     tokens = tokenizer(text)
@@ -105,11 +106,6 @@ def build_vocabulary(tokens):
 def map_token_and_id(vocabulary):
     stabil_vocabulary = list(vocabulary)
     return {token: i for i, token in enumerate(stabil_vocabulary)}, {i: token for i, token in enumerate(stabil_vocabulary)}
-
-
-def map_token_and_id_fn(vocabulary):
-    token2id, id2token = map_token_and_id(vocabulary)
-    return lambda token: token2id[token] if token in token2id else token2id["[UNK]"], lambda id: id2token[id]
 
 
 class XRayDataset(Dataset):
@@ -127,7 +123,7 @@ class XRayDataset(Dataset):
         report = ["[START]"] + report + ["[END]"]
 
         report_length = len(report)
-        report_ids = [self.token2id(token) for token in report]
+        report_ids = [self.token2id[token] for token in report]
 
         return image, report_ids, report_length
 

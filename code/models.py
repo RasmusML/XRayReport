@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchvision.models import vgg19, VGG19_Weights, vit_b_16, ViT_B_16_Weights
+from torchvision.transforms import Normalize
 
 
 import numpy as np
@@ -240,18 +241,104 @@ class XRayViTModel(nn.Module):
         context = self.encoder(images)
         output = self.decoder(text, context)
         return output
-    
+
+#
+# CheXNet Models
+
+def load_CheXNet():
+    """
+        Reference:
+        https://github.com/jrzech/reproduce-chexnet
+    """
+    checkpoint = torch.load(os.path.join("models", "chexnet_jrzech.ckt"), map_location=torch.device('cpu'))
+    return checkpoint["model"]
+
+
+class CheXNetEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.chexnet = load_CheXNet()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+    def forward(self, xray):
+        x = self.chexnet.features(xray)
+        x = self.avgpool(x)
+        return x.squeeze()
+
+
+    def preprocess(self, xrays, batch_size=16):
+        xrays = xrays.unsqueeze(1).expand(-1, 3, -1, -1)
+        xrays = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(xrays)
+
+        result = torch.zeros(xrays.shape[0], 1024)
+
+        with torch.no_grad():
+            for i in range(0, xrays.shape[0], batch_size):
+                start = i
+                end = min((i+1) * batch_size, xrays.shape[0])
+                result[start:end] = self.forward(xrays[start:end])
+
+        return result
+
+
+class CheXNetBaseNet(nn.Module):
+    def __init__(self, word_embeddings, hidden_size=256):
+        super().__init__()
+
+        self.encoder = CheXNetEncoder()
+
+        self.linear1 = nn.Linear(1024, hidden_size)
+
+        self.vocab_size = word_embeddings.shape[0]
+        self.embedding_size = word_embeddings.shape[1]
+
+        self.embed = nn.Embedding.from_pretrained(torch.tensor(word_embeddings, dtype=torch.float32), freeze=False) # fine-tune word embeddings as some of them where not in GloVe
+        self.lstm = nn.LSTM(self.embedding_size, hidden_size, batch_first=True, bidirectional=False)
+        self.dropout = nn.Dropout(0.5)
+
+        self.linear2 = nn.Linear(2 * hidden_size, hidden_size)
+        self.linear3 = nn.Linear(hidden_size, self.vocab_size)
+
+    def forward(self, token_ids, context):
+        context = self.linear1(context)
+        context = context.unsqueeze(1).expand(-1, token_ids.shape[1], -1)
+
+        token_ids = self.embed(token_ids)
+        token_ids, (hn, cn) = self.lstm(token_ids)
+        token_ids = self.dropout(token_ids)
+        
+        z = torch.cat([context, token_ids], dim=-1)
+        z = self.linear2(z)
+        z = F.relu(z)
+        z = self.linear3(z)
+
+        return z
+
    
 #
-# training
+# shared
 #
+
+def download_glove(embedding_name="glove-wiki-gigaword-300"):
+    import gensim.downloader
+    glove_vectors = gensim.downloader.load(embedding_name)
+    return glove_vectors
+
+
+def get_word_embeddings(token2id, glove_vectors):
+    word_embeddings = np.zeros((len(token2id), glove_vectors.vector_size))
+    for token, id in token2id.items():
+        if token in glove_vectors:
+            word_embeddings[id] = glove_vectors[token]
+    return word_embeddings
+
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
           epochs, lr, batch_size, weight_decay):
     
     os.makedirs(os.path.join("results", model_name), exist_ok=True)
 
-    token2id, _ = map_token_and_id_fn(vocabulary)
+    token2id, _ = map_token_and_id(vocabulary)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -259,14 +346,14 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     result = {}
 
     # prepare dataloaders
-    collate_fn = lambda input: report_collate_fn(token2id("[PAD]"), input)
+    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
 
     train_dl = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
     # hyperparameters
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    #optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
+    #optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"])
 
     train_losses = []
     validation_losses = []
@@ -305,7 +392,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
         validation_loss = evaluate(model, validation_dataset, token2id)
         validation_losses.append(validation_loss)
 
-        print(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
+        logging.info(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
         if t % save_model_every == 0:
             torch.save(model.state_dict(), os.path.join("results", model_name, f"model_{t}.pt"))
@@ -323,9 +410,9 @@ def evaluate(model, test_dataset, token2id, batch_size=32):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #model = model.to(device)
 
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id("[PAD]"))
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"])
 
-    collate_fn = lambda input: report_collate_fn(token2id("[PAD]"), input)
+    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
     test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     with torch.no_grad():
