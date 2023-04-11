@@ -48,26 +48,27 @@ def main(args):
         raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
 
         model = XRayViTModel(len(vocabulary))
-        images = model.encoder.preprocess(raw_images)
-
-    elif args.model == "base":
-        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
-
-        model = XRayBaseModel(len(vocabulary))
-        images = model.encoder.preprocess(raw_images)
+        images = model.preprocess(raw_images)
 
     elif args.model == "playground":
         raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
 
-        model = XRayPlaygroundModel(len(vocabulary))
-        images = model.encoder.preprocess(raw_images)
+        model = PlaygroundModel(len(vocabulary))
+        images = model.preprocess(raw_images)
 
-    elif args.model == "chex":
-        images = torch.load("data/processed/chex_images.pt")[reports.index]
+    elif args.model == "chex1":
+        images = torch.load("data/processed/chex1_images.pt")[reports_subset.index]
 
         glove_vector = download_glove()
         word_embeddings = get_word_embeddings(token2id, glove_vector)
-        model = CheXNetBaseNet(word_embeddings)
+        model = CheXNet1(word_embeddings)
+
+    elif args.model == "chex2":
+        images = torch.load("data/processed/chex2_images.pt")[reports_subset.index]
+
+        glove_vector = download_glove()
+        word_embeddings = get_word_embeddings(token2id, glove_vector)
+        model = CheXTransformerNet(word_embeddings)
     else:
         raise ValueError(f"model {args.model} not supported")
 

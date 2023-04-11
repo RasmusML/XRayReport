@@ -24,16 +24,23 @@ def main(args):
     raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
     raw_images = raw_images.to(device)
 
-    encoder = CheXNetEncoder()
-    encoder = encoder.to(device)
+    if args.model == "chex1":
+        encoder = CheXNetEncoder1()
+    elif args.model == "chex2":
+        encoder = CheXNetEncoder2()
+    else:
+        raise ValueError("Unknown model name")
 
-    images = encoder.preprocess(raw_images)
-    
+    encoder = encoder.to(device)
+    images = process_to_fixed_context(encoder, raw_images)
+
     os.makedirs("data/processed", exist_ok=True)
-    torch.save(images, "data/processed/chex_images.pt")
+    torch.save(images, f"data/processed/{args.model}_images.pt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument("--model")
     parser.add_argument("--size", default=-1, type=int)
 
     args = parser.parse_args()
