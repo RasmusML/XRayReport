@@ -20,9 +20,9 @@ def main(args):
     if args.size > 0:
         metadata = metadata[:args.size]
 
-    raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))
+    raw_images = raw_images.to(device)
 
     encoder = CheXNetEncoder()
     encoder = encoder.to(device)

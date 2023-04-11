@@ -130,29 +130,9 @@ class XRayBaseModel(nn.Module):
         x, _ = self.decoder(text, context)
         return x
     
-#
-# Model 2, @TODO: add decoder
-#
-
-class XRayVGG19Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        weights = VGG19_Weights.DEFAULT
-        self.preprocess_fn = weights.transforms()
-
-        self.encoder = vgg19(weights=VGG19_Weights(weights))
-
-    def forward(self, images):
-        return self.encoder.features[:35](images) # last conv layer, similiar to the paper.
-    
-    def preprocess(self, images):
-        expanded = images.unsqueeze(1).expand(-1, 3, -1, -1)
-        return self.preprocess_fn(expanded)
-
 
 #
-# Model 3
+# Model 2
 #
 
 class PositionalEncoding(nn.Module):
@@ -285,6 +265,8 @@ class CheXNetEncoder(nn.Module):
 class CheXNetBaseNet(nn.Module):
     def __init__(self, word_embeddings, hidden_size=256):
         super().__init__()
+
+        self.encoder = CheXNetEncoder()
 
         self.linear1 = nn.Linear(1024, hidden_size)
 

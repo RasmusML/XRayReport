@@ -24,10 +24,13 @@ def main(args):
 
     metadata = load_reports(REPORT_PATH)
 
+    metadata_subset = metadata
+
     if args.size > 0:
-        metadata = metadata[:args.size]
+        metadata_subset = metadata[:args.size]
     
     logging.info("loading reports...")
+    reports_subset = prepare_reports(metadata_subset)
     reports = prepare_reports(metadata)
 
     logging.info("preprocessing...")
@@ -42,19 +45,19 @@ def main(args):
     logging.info("loading images and models...")
     
     if args.model == "vit":
-        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports.index]
+        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
 
         model = XRayViTModel(len(vocabulary))
         images = model.encoder.preprocess(raw_images)
 
     elif args.model == "base":
-        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports.index]
+        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
 
         model = XRayBaseModel(len(vocabulary))
         images = model.encoder.preprocess(raw_images)
 
     elif args.model == "playground":
-        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports.index]
+        raw_images = load_images(metadata, IMAGE_PATH, resized=(224, 224))[reports_subset.index]
 
         model = XRayPlaygroundModel(len(vocabulary))
         images = model.encoder.preprocess(raw_images)

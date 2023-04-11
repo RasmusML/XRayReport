@@ -1,6 +1,6 @@
 model: chex
-#size: 5
-epochs: 60
+size: 20
+epochs: 20
 lr: 0.001
 batch_size: 128
 weight_decay: 0
