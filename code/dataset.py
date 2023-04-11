@@ -104,6 +104,7 @@ def build_vocabulary(tokens):
 
 def map_token_and_id(vocabulary):
     stabil_vocabulary = list(vocabulary)
+    stabil_vocabulary.sort()
     return {token: i for i, token in enumerate(stabil_vocabulary)}, {i: token for i, token in enumerate(stabil_vocabulary)}
 
 

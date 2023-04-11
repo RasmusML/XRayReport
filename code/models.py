@@ -238,7 +238,7 @@ class CheXNetEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.chexnet = load_CheXNet()
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.avgpool = nn.AvgPool2d((7, 7))
 
     def forward(self, xray):
         x = self.chexnet.features(xray)
