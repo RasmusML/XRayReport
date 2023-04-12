@@ -14,7 +14,7 @@ import numpy as np
 
 from utils import save_dict
 from dataset import *
-from nlp import bleu_score
+from nlp import *
 import patched_transformer as pm
 
 #
@@ -80,6 +80,19 @@ class PlaygroundModel(nn.Module):
     
     def preprocess(self, images):
         return images.unsqueeze(1)
+    
+    def cached_emitter(self, image):
+        with torch.no_grad():
+            self.eval()
+            context = self.encoder(image[None])
+
+        def emitter(tokens):
+            with torch.no_grad():
+                self.eval()
+                out, _ = self.decoder(tokens[None], context)
+                return F.log_softmax(out[0,-1,:], dim=-1)
+    
+        return emitter
 
 
 #
@@ -156,6 +169,14 @@ class CheXNet1(nn.Module):
     
     def preprocess(self, images):
         return process_to_fixed_context(self.encoder, images)
+    
+    def cached_emitter(self, context):
+        def emitter(tokens):
+            with torch.no_grad():
+                self.eval()
+                out = self.forward(tokens[None], context[None]) # add batch dim
+                return F.log_softmax(out[0,-1,:], dim=-1)
+        return emitter
 
 #
 # Model 3
@@ -181,7 +202,7 @@ class TransformerDecoder(nn.Module):
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
         self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
         
-        if n_transformer_layers > 1:
+        if self.n_transformer_layers > 1:
             self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
             self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
 
@@ -190,17 +211,20 @@ class TransformerDecoder(nn.Module):
     def forward(self, token_ids, context):
         context = self.context_to_hidden(context)
 
+        mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
+
         x = self.embedding(token_ids)
         x = self.positional_encoding(x)
         x = self.embedding_to_hidden(x)
 
-        x = self.decoder_layer1(x, context, tgt_is_causal=True)
-        #x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(token_ids.size(1)))
+        #x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        x = self.decoder_layer1(x, context, tgt_mask=mask)
 
         if self.n_transformer_layers > 1:
-            x = self.decoder_layerN(x, context)
+            x = self.decoder_layerN(x, context, tgt_mask=mask)
 
         return self.linear_vocab_dist(x)
+
 
 
 class CheXNetEncoder2(nn.Module):
@@ -230,6 +254,14 @@ class CheXTransformerNet(nn.Module):
     
     def preprocess(self, images):
         return process_to_fixed_context(self.encoder, images)
+    
+    def cached_emitter(self, context):
+        def emitter(tokens):
+            with torch.no_grad():
+                self.eval()
+                out = self.forward(tokens[None], context[None]) # add batch dim
+                return F.log_softmax(out[0,-1,:], dim=-1)
+        return emitter
     
 
 #
@@ -311,9 +343,20 @@ class XRayViTModel(nn.Module):
     def preprocess(self, images):
         return images
     
-    def next_token_from_context(self, token_ids, context):
-        out, _ = self.decoder(token_ids[None], context) # add batch dim
-        return F.log_softmax(out[0,-1,:], dim=-1)
+    def cached_emitter(model, image):
+    # persistent state to speed-up sampling
+        with torch.no_grad():
+            eval()
+            context = model.encoder(image[None]).detach()
+
+        # define emitter
+        def emitter(tokens):
+            with torch.no_grad():
+                model.eval()
+                out = model.decoder(tokens[None], context) # add batch dim
+            return F.log_softmax(out[0,-1,:], dim=-1)
+        
+        return emitter
    
 #
 # shared
@@ -440,14 +483,14 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
 
     results = {}
 
-    token2id, _ = map_token_and_id(vocabulary)
+    token2id, id2token = map_token_and_id(vocabulary)
 
     train_dl = get_dataloader(train_dataset, token2id, batch_size=batch_size, shuffle=True)
     validation_dl = get_dataloader(validation_dataset, token2id, batch_size=batch_size, shuffle=False)
 
     results["train_losses"] = []
     results["validation_losses"] = []
-    #results["validation_bleu"] = []
+    results["validation_bleu"] = []
 
     for t in range(epochs):
         train_loss = train_one_epoch(model, train_dl, token2id, optimizer, device, loss_weights, disable_tqdm=disable_tqdm)
@@ -459,10 +502,10 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
         logging.info(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
         if (t+1) % checkpoint_save_freq == 0:
-            #references, candidates = prepare_for_evaluation()
-            #bleu = bleu_score(references, candidates)
-            #results["validation_bleu"].append(bleu)
-            #logging.info(f"Epoch {t+1} BLEU: {bleu}")
+            references, candidates = prepare_for_evaluation(model, validation_dataset, token2id, id2token, early_exit=2)
+            bleu = bleu_score(references, candidates)
+            results["validation_bleu"].append(bleu)
+            logging.info(f"Epoch {t+1} BLEU: {bleu}")
 
             torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
     

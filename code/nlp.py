@@ -5,24 +5,24 @@ import numpy as np
 from nltk.translate.bleu_score import corpus_bleu
 
 
-def prepare_for_evaluation(emit_wrap, model, dataset, token2id, id2token, max_length=200, log_every=5):
+def prepare_for_evaluation(model, dataset, token2id, id2token, max_length=200, log_every=5, early_exit=10):
     references = []
     candidates = []
 
     for i, (xray, token_ids, _) in enumerate(dataset):
+        if i == early_exit:
+            break
         
         if log_every > 0 and i % log_every == 0:
             logging.info(f"sample {i}")
         
-        #emit = playground_emit(model, x)
-        #emit = vit_emit(model, x)
-        emit = emit_wrap(model, xray)
+        emit = model.cached_emitter(xray)
 
         target = [id2token[token] for token in token_ids[1:-1]]
         references.append([target])
 
-        #generated_ids = beam_search(emit, token2id, beam_width=1, max_length=max_length)[0]
-        generated_ids = greedy_search(emit, token2id, max_length=max_length)
+        #generated_ids = beam_search(model, token2id, beam_width=1, max_length=max_length)[0]
+        generated_ids = greedy_search(model, xray, token2id, max_length=max_length)
         generated = [id2token[token] for token in generated_ids[1:-1]]
         candidates.append(generated)
 
@@ -40,12 +40,14 @@ def bleu_score(references, candidates):
     return corpus_bleu(references, candidates, weights=weights)
 
 
-def greedy_search(emit_fn, token2id, max_length=100):
+def greedy_search(model, xray, token2id, max_length=200):
     start_token = token2id["[START]"]
     token_ids = [start_token]
 
+    emit = model.cached_emitter(xray)
+
     for _ in range(1, max_length):
-        scores = emit_fn(torch.tensor(token_ids))
+        scores = emit(torch.tensor(token_ids))
         token_id = torch.argmax(scores).item()
         token_ids.append(token_id)
 
@@ -55,12 +57,14 @@ def greedy_search(emit_fn, token2id, max_length=100):
     return token_ids
 
 
-def prob_sample(emit_fn, token2id, max_length=100):
+def prob_sample(model, xray, token2id, max_length=200):
     start_token = token2id["[START]"]
     token_ids = [start_token]
 
+    emit = model.cached_emitter(xray)
+
     for _ in range(1, max_length):
-        scores = emit_fn(torch.tensor(token_ids))
+        scores = emit(torch.tensor(token_ids))
             
         p = F.softmax(scores, dim=-1).detach().numpy().astype(np.float64)
         p /= np.sum(p)
@@ -74,13 +78,15 @@ def prob_sample(emit_fn, token2id, max_length=100):
     return token_ids
 
 
-def beam_search(emit_fn, token2id, beam_width=5, max_length=100):
+def beam_search(model, xray, token2id, beam_width=5, max_length=100):
     start_token = token2id["[START]"]
 
     beams = [(0, [start_token]) for _ in range(beam_width)] # (score, tokens)
     done = []
 
-    scores = emit_fn(torch.tensor([start_token]))
+    emit = model.cached_emitter(xray)
+
+    scores = emit(torch.tensor([start_token]))
     _, top_idx = scores.topk(beam_width)
     for idx, (score, token_ids) in enumerate(beams):
         top_id = top_idx[idx]
@@ -99,7 +105,7 @@ def beam_search(emit_fn, token2id, beam_width=5, max_length=100):
         all_scores = all_scores.expand((beam_width, vocab_size)).clone()
 
         for idx, (score, token_ids) in enumerate(beams):
-            scores = emit_fn(torch.tensor(token_ids))
+            scores = emit(torch.tensor(token_ids))
             all_scores[idx] += scores
 
         _, top_idx = all_scores.flatten().topk(beam_width)
