@@ -194,8 +194,8 @@ class TransformerDecoder(nn.Module):
         x = self.positional_encoding(x)
         x = self.embedding_to_hidden(x)
 
-        #x = self.decoder_layer1(x, context, tgt_is_causal=True)
-        x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(token_ids.size(1)))
+        x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        #x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(token_ids.size(1)))
 
         if self.n_transformer_layers > 1:
             x = self.decoder_layerN(x, context)
@@ -287,7 +287,8 @@ class XRayViTDecoder(nn.Module):
     def forward(self, input, context):
         x = self.embedding(input)
         x = self.positional_encoding(x)
-        x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(input.size(1)))
+        x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        #x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(input.size(1)))
 
         if self.n_transformer_layers > 1:
             x = self.decoder_layerN(x, context)
@@ -427,47 +428,48 @@ def make_model_dirs(model_name):
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
-          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True):
+          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200):
     
     make_model_dirs(model_name)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    if loss_weights:
+    if loss_weights is not None:
         loss_weights = loss_weights.to(device)
 
-    loss_results = {}
+    results = {}
 
     token2id, _ = map_token_and_id(vocabulary)
 
     train_dl = get_dataloader(train_dataset, token2id, batch_size=batch_size, shuffle=True)
     validation_dl = get_dataloader(validation_dataset, token2id, batch_size=batch_size, shuffle=False)
 
-    train_losses = []
-    validation_losses = []
-
-    save_model_every = 200
+    results["train_losses"] = []
+    results["validation_losses"] = []
+    #results["validation_bleu"] = []
 
     for t in range(epochs):
         train_loss = train_one_epoch(model, train_dl, token2id, optimizer, device, loss_weights, disable_tqdm=disable_tqdm)
-        train_losses.append(train_loss)
+        results["train_losses"].append(train_loss)
 
         validation_loss = evaluate(model, validation_dl, token2id, device, loss_weights, disable_tqdm=disable_tqdm)
-        validation_losses.append(validation_loss)
+        results["validation_losses"].append(validation_loss)
 
         logging.info(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
-        if (t+1) % save_model_every == 0:
-            torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t}.pt"))
+        if (t+1) % checkpoint_save_freq == 0:
+            #references, candidates = prepare_for_evaluation()
+            #bleu = bleu_score(references, candidates)
+            #results["validation_bleu"].append(bleu)
+            #logging.info(f"Epoch {t+1} BLEU: {bleu}")
+
+            torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
     
     
     torch.save(model.state_dict(), os.path.join("models", model_name, "model.pt"))
 
-    loss_results["train_losses"] = train_losses
-    loss_results["validation_losses"] = validation_losses
-
-    loss_results["test_loss"] = 5 # @TODO: WIP
+    results["test_loss"] = 5 # @TODO: WIP
     """ # @TODO: WIP
     logging.info("evaluating...")
     result_path = os.path.join("results", model_name, "result.pkl")
@@ -475,7 +477,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     result["test_loss"] = evaluate(model, test_dataset, token2id)
     save_dict(result, result_path)
     """
-    save_dict(loss_results, os.path.join("results", model_name, "result.pkl"))
+    save_dict(results, os.path.join("results", model_name, "result.pkl"))
 
 
 def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_weights=None, disable_tqdm=True):

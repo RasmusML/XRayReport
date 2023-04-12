@@ -33,6 +33,7 @@ Supported Configs
         "batch_size": 32,
         "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
         "weighted_loss": True
+        "checkpoint_save_freq": 100
     },
 }
 
@@ -75,7 +76,8 @@ def main(args):
                 "epochs": 100,
                 "batch_size": 32,
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
-                "weighted_loss": True
+                "weighted_loss": True,
+                "checkpoint_save_freq": 200,
             },
         }
 
@@ -93,7 +95,8 @@ def main(args):
                 "epochs": 2400,
                 "batch_size": 128,
                 "optimizer": optim.Adam(model.parameters(), lr=0.0001),
-                "weighted_loss": True
+                "weighted_loss": True,
+                "checkpoint_save_freq": 100,
             },
         }
     elif model_name == "playground":
@@ -108,7 +111,8 @@ def main(args):
                 "epochs": 1000,
                 "batch_size": 32,
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
-                "weighted_loss": True
+                "weighted_loss": True,
+                "checkpoint_save_freq": 100,
             },
         }
 
@@ -124,7 +128,8 @@ def main(args):
                 "epochs": 1000,
                 "batch_size": 32,
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
-                "weighted_loss": True
+                "weighted_loss": True,
+                "checkpoint_save_freq": 100,
             },
         }
 
@@ -166,14 +171,16 @@ def main(args):
 
     if train_config["weighted_loss"]:
         token_occurencies = count_token_occurences(tokenized_reports)
-        loss_weights = torch.ones(len(vocabulary), dtype=torch.float32)
+        loss_weights = torch.zeros(len(vocabulary), dtype=torch.float32)
+        loss_weights[token2id["[END]"]] = 1 / len(tokenized_reports)
 
         for token, occurencies in token_occurencies.items():
             loss_weights[token2id[token]] = 1 / occurencies
 
 
+
     logging.info("training...")
-    train(model_name, model, vocabulary, train_dataset, validation_dataset, batch_size=train_config["batch_size"], epochs=train_config["epochs"], optimizer=train_config["optimizer"], loss_weights=loss_weights)
+    train(model_name, model, vocabulary, train_dataset, validation_dataset, batch_size=train_config["batch_size"], epochs=train_config["epochs"], optimizer=train_config["optimizer"], loss_weights=loss_weights, checkpoint_save_freq=train_config["checkpoint_save_freq"])
 
 
 if __name__ == "__main__":
