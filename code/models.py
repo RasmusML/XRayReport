@@ -434,6 +434,9 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
+    if loss_weights:
+        loss_weights = loss_weights.to(device)
+
     loss_results = {}
 
     token2id, _ = map_token_and_id(vocabulary)
