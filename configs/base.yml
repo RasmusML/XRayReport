@@ -1,6 +1,0 @@
-model: base
-#size: 2000
-epochs: 600
-lr: 0.002
-batch_size: 128
-weight_decay: 0

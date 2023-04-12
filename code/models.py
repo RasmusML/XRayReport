@@ -10,11 +10,11 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.models import vgg19, VGG19_Weights, vit_b_16, ViT_B_16_Weights
 from torchvision.transforms import Normalize
 
-
 import numpy as np
 
 from utils import save_dict
 from dataset import *
+from nlp import bleu_score
 import patched_transformer as pm
 
 #
@@ -78,7 +78,7 @@ class PlaygroundModel(nn.Module):
         output, _ = self.decoder(text, context)
         return output
     
-    def process(self, images):
+    def preprocess(self, images):
         return images.unsqueeze(1)
 
 
@@ -90,7 +90,7 @@ def load_CheXNet():
         Reference:
         https://github.com/jrzech/reproduce-chexnet
     """
-    checkpoint = torch.load(os.path.join("models", "chexnet_jrzech.ckt"), map_location=torch.device('cpu'))
+    checkpoint = torch.load(os.path.join("models", "chexnet", "chexnet_jrzech.ckt"), map_location=torch.device('cpu'))
     return checkpoint["model"]
 
 
@@ -163,14 +163,14 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=320, context_size=1024, num_transformer_layers=1, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, hidden_dim=640, context_size=1024, n_transformer_layers=1, freeze_embeddings=False):
         super().__init__()
 
-        assert num_transformer_layers >= 1
+        assert n_transformer_layers >= 1
 
         self.hidden_dim = hidden_dim
         self.context_size = context_size
-        self.num_transformer_layers = num_transformer_layers
+        self.n_transformer_layers = n_transformer_layers
         self.vocab_size = pretrained_embeddings.shape[0]
         self.embedding_dim = pretrained_embeddings.shape[1]
 
@@ -181,9 +181,9 @@ class TransformerDecoder(nn.Module):
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
         self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
         
-        if num_transformer_layers > 1:
+        if n_transformer_layers > 1:
             self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
-            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, num_transformer_layers - 1)
+            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
 
         self.linear_vocab_dist = nn.Linear(self.hidden_dim, self.vocab_size)
 
@@ -194,9 +194,10 @@ class TransformerDecoder(nn.Module):
         x = self.positional_encoding(x)
         x = self.embedding_to_hidden(x)
 
-        x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        #x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(token_ids.size(1)))
 
-        if self.num_transformer_layers > 1:
+        if self.n_transformer_layers > 1:
             x = self.decoder_layerN(x, context)
 
         return self.linear_vocab_dist(x)
@@ -217,11 +218,11 @@ class CheXNetEncoder2(nn.Module):
     
 
 class CheXTransformerNet(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=320, num_transformer_layers=5):
+    def __init__(self, pretrained_embeddings, hidden_dim=960, n_transformer_layers=8):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
-        self.decoder = TransformerDecoder(pretrained_embeddings, hidden_dim=hidden_dim, num_transformer_layers=num_transformer_layers)
+        self.decoder = TransformerDecoder(pretrained_embeddings, hidden_dim=hidden_dim, n_transformer_layers=n_transformer_layers)
         
     def forward(self, text, context):
         output = self.decoder(text, context)
@@ -229,12 +230,11 @@ class CheXTransformerNet(nn.Module):
     
     def preprocess(self, images):
         return process_to_fixed_context(self.encoder, images)
+    
 
 #
 # Model 3
 #
-
-# @TODO: WIP
 
 class XRayViTEncoder(nn.Module):
     def __init__(self):
@@ -263,12 +263,12 @@ class XRayViTEncoder(nn.Module):
     
 
 class XRayViTDecoder(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size, num_transformer_layers, pretrained_embeddings=None):
+    def __init__(self, vocabulary_size, hidden_size, n_transformer_layers, pretrained_embeddings=None):
         super().__init__()
 
-        assert num_transformer_layers >= 0
+        assert n_transformer_layers >= 0
         
-        self.num_transformer_layers = num_transformer_layers
+        self.n_transformer_layers = n_transformer_layers
         self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
 
         if pretrained_embeddings:
@@ -278,38 +278,50 @@ class XRayViTDecoder(nn.Module):
         
         self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
         
-        if num_transformer_layers > 1:
+        if n_transformer_layers > 1:
             self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
-            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, num_transformer_layers - 1)
+            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
 
         self.linear = nn.Linear(hidden_size, vocabulary_size)
 
     def forward(self, input, context):
         x = self.embedding(input)
         x = self.positional_encoding(x)
-        x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(input.size(1)))
 
-        if self.num_transformer_layers > 1:
+        if self.n_transformer_layers > 1:
             x = self.decoder_layerN(x, context)
 
         return self.linear(x)
 
 
 class XRayViTModel(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768, num_transformer_layers=5):
+    def __init__(self, vocabulary_size, hidden_size=768, n_transformer_layers=5):
         super().__init__()
 
         self.encoder = XRayViTEncoder()
-        self.decoder = XRayViTDecoder(vocabulary_size, hidden_size, num_transformer_layers=num_transformer_layers)
+        self.decoder = XRayViTDecoder(vocabulary_size, hidden_size, n_transformer_layers=n_transformer_layers)
         
     def forward(self, text, images):
         context = self.encoder(images)
         output = self.decoder(text, context)
         return output
+    
+    def preprocess(self, images):
+        return images
+    
+    def next_token_from_context(self, token_ids, context):
+        out, _ = self.decoder(token_ids[None], context) # add batch dim
+        return F.log_softmax(out[0,-1,:], dim=-1)
    
 #
 # shared
 #
+
+def generate_square_subsequent_mask(sz):
+    mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
 
 
 class PositionalEncoding(nn.Module):
@@ -345,6 +357,10 @@ def process_to_fixed_context(encoder, images, batch_size=16):
         return result
 
 
+#
+# Embeddings
+#
+
 def download_glove(embedding_name="glove-wiki-gigaword-300"):
     import gensim.downloader
     glove_vectors = gensim.downloader.load(embedding_name)
@@ -359,27 +375,71 @@ def get_word_embeddings(token2id, glove_vectors):
     return word_embeddings
 
 
-def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
-          epochs, lr, batch_size, weight_decay):
-    
-    os.makedirs(os.path.join("results", model_name), exist_ok=True)
+#
+# Dataset
+#
 
-    token2id, _ = map_token_and_id(vocabulary)
+def get_dataloader(dataset, token2id, shuffle=True, batch_size=16):
+    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn)
+
+
+class XRayDataset(Dataset):
+    def __init__(self, images, reports, token2id):
+        self.images = images
+        self.reports = reports
+        self.token2id = token2id
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+        report = self.reports.iloc[idx]
+        report = ["[START]"] + report + ["[END]"]
+
+        report_length = len(report)
+        report_ids = [self.token2id[token] for token in report]
+
+        return image, report_ids, report_length
+
+
+def report_collate_fn(pad_id, input):
+    images, reports, report_lengths = zip(*input)
+
+    report_max_length = max(report_lengths)
+    padded_reports = [report + [pad_id] * (report_max_length - length) for report, length in zip(reports, report_lengths)]
+
+    t_images = torch.stack(list(images), dim=0)
+    t_reports = torch.tensor(padded_reports)
+    t_report_lengths = torch.tensor(report_lengths)
+
+    return t_images, t_reports, t_report_lengths
+
+
+#
+# Training and evaluation
+#
+
+def make_model_dirs(model_name):
+    ensure_dir(os.path.join("results", model_name))
+    ensure_dir(os.path.join("models", model_name))
+
+
+def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
+          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True):
+    
+    make_model_dirs(model_name)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    result = {}
+    loss_results = {}
 
-    # prepare dataloaders
-    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
+    token2id, _ = map_token_and_id(vocabulary)
 
-    train_dl = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-
-    # hyperparameters
-    #optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"])
+    train_dl = get_dataloader(train_dataset, token2id, batch_size=batch_size, shuffle=True)
+    validation_dl = get_dataloader(validation_dataset, token2id, batch_size=batch_size, shuffle=False)
 
     train_losses = []
     validation_losses = []
@@ -387,69 +447,74 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     save_model_every = 200
 
     for t in range(epochs):
-        model.train()
-
-        batch_train_losses = []
-
-        for xrays, reports, report_lengths in tqdm(train_dl):
-            xrays = xrays.to(device)
-            reports = reports.to(device)
-            report_lengths = report_lengths.to(device)
-
-            y_pred = model(reports, xrays)
-
-            # Since a LM predicts the next token, we need shift the tokens. Tokens "!   !" should be ignored.
-            # y_est:  <hello>   <sailor>  <!>       <[END]>  !misc!
-            # y_true: !Start!   <hello>   <sailor>  <!>      <[End]>
-            y_pred_align = y_pred[:,:-1,:]
-            y_true_align = reports[:,1:]
-
-            loss = criterion(y_pred_align.flatten(end_dim=1), y_true_align.flatten())
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            batch_train_losses.append(loss.detach().cpu().numpy())
-
-        train_loss = np.mean(batch_train_losses)
+        train_loss = train_one_epoch(model, train_dl, token2id, optimizer, device, loss_weights, disable_tqdm=disable_tqdm)
         train_losses.append(train_loss)
 
-        validation_loss = evaluate(model, validation_dataset, token2id)
+        validation_loss = evaluate(model, validation_dl, token2id, device, loss_weights, disable_tqdm=disable_tqdm)
         validation_losses.append(validation_loss)
 
         logging.info(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
-        if t % save_model_every == 0:
-            torch.save(model.state_dict(), os.path.join("results", model_name, f"model_{t}.pt"))
+        if (t+1) % save_model_every == 0:
+            torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t}.pt"))
     
+    
+    torch.save(model.state_dict(), os.path.join("models", model_name, "model.pt"))
 
-    result["train_losses"] = train_losses
-    result["validation_losses"] = validation_losses
+    loss_results["train_losses"] = train_losses
+    loss_results["validation_losses"] = validation_losses
 
-    save_dict(result, os.path.join("results", model_name, "result.pkl"))
+    loss_results["test_loss"] = 5 # @TODO: WIP
+    """ # @TODO: WIP
+    logging.info("evaluating...")
+    result_path = os.path.join("results", model_name, "result.pkl")
+    result = load_dict(result_path)
+    result["test_loss"] = evaluate(model, test_dataset, token2id)
+    save_dict(result, result_path)
+    """
+    save_dict(loss_results, os.path.join("results", model_name, "result.pkl"))
 
-    torch.save(model.state_dict(), os.path.join("results", model_name, "model.pt"))
+
+def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_weights=None, disable_tqdm=True):
+    train_losses = []
+
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"], weight=loss_weights)
+
+    model.train()
+    for xrays, reports, _ in tqdm(train_dataloader, disable=disable_tqdm):
+        xrays = xrays.to(device)
+        reports = reports.to(device)
+
+        y_pred = model(reports, xrays)
+
+        # Since a LM predicts the next token, we need shift the tokens. Tokens "!   !" should be ignored.
+        # y_est:  <hello>   <sailor>  <!>       <[END]>  !misc!
+        # y_true: !Start!   <hello>   <sailor>  <!>      <[End]>
+        y_pred_align = y_pred[:,:-1,:]
+        y_true_align = reports[:,1:]
+
+        loss = criterion(y_pred_align.flatten(end_dim=1), y_true_align.flatten())
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        train_losses.append(loss.detach().cpu().numpy())
+
+    return np.mean(train_losses)
 
 
-def evaluate(model, test_dataset, token2id, batch_size=32):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #model = model.to(device)
-
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"])
-
-    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
-    test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+def evaluate(model, test_dataloader, token2id, device, loss_weights=None, disable_tqdm=True):
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"], weight=loss_weights)
 
     with torch.no_grad():
         model.eval()
 
-        batch_test_losses = []
+        test_losses = []
 
-        for xrays, reports, report_lengths in tqdm(test_dl):
+        for xrays, reports, _ in tqdm(test_dataloader, disable=disable_tqdm):
             xrays = xrays.to(device)
             reports = reports.to(device)
-            report_lengths = report_lengths.to(device)
 
             y_pred = model(reports, xrays)
 
@@ -457,6 +522,6 @@ def evaluate(model, test_dataset, token2id, batch_size=32):
             y_true_align = reports[:,1:]
 
             loss = criterion(y_pred_align.flatten(end_dim=1), y_true_align.flatten())
-            batch_test_losses.append(loss.detach().cpu().numpy())
+            test_losses.append(loss.detach().cpu().numpy())
 
-    return np.mean(batch_test_losses)
+    return np.mean(test_losses)

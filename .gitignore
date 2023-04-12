@@ -8,6 +8,9 @@ runs/
 results/
 data/processed
 
+models/*
+!model/chexnet
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

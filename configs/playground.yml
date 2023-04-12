@@ -1,6 +1,0 @@
-model: playground
-#size: 2000
-epochs: 600
-lr: 0.001
-batch_size: 128
-weight_decay: 0.0001

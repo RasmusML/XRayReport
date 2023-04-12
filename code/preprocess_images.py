@@ -34,8 +34,8 @@ def main(args):
     encoder = encoder.to(device)
     images = process_to_fixed_context(encoder, raw_images)
 
-    os.makedirs("data/processed", exist_ok=True)
-    torch.save(images, f"data/processed/{args.model}_images.pt")
+    ensure_dir(os.path.join("data", "processed"))
+    torch.save(images, os.path.join("data", "processed", f"{args.model}_images.pt"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

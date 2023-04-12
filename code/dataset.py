@@ -55,7 +55,7 @@ def load_images(metadata, image_path, resized=(224, 224)):
         raw_images[sample] = crop_and_scale(image[..., 0], resized)
 
     images = torch.tensor(np.array(list(raw_images.values())), dtype=torch.float32)
-    normalized_images = normalize_images(images)
+    normalized_images = images / 255.
 
     return normalized_images
 
@@ -108,39 +108,14 @@ def map_token_and_id(vocabulary):
     return {token: i for i, token in enumerate(stabil_vocabulary)}, {i: token for i, token in enumerate(stabil_vocabulary)}
 
 
-class XRayDataset(Dataset):
-    def __init__(self, images, reports, token2id):
-        self.images = images
-        self.reports = reports
-        self.token2id = token2id
+def count_token_occurences(tokenized_reports):
+    token_counts = {}
 
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        image = self.images[idx]
-        report = self.reports.iloc[idx]
-        report = ["[START]"] + report + ["[END]"]
-
-        report_length = len(report)
-        report_ids = [self.token2id[token] for token in report]
-
-        return image, report_ids, report_length
-
-
-def report_collate_fn(pad_id, input):
-    images, reports, report_lengths = zip(*input)
-
-    report_max_length = max(report_lengths)
-    padded_reports = [report + [pad_id] * (report_max_length - length) for report, length in zip(reports, report_lengths)]
-
-    t_images = torch.stack(list(images), dim=0)
-    t_reports = torch.tensor(padded_reports)
-    t_report_lengths = torch.tensor(report_lengths)
-
-    return t_images, t_reports, t_report_lengths
-
-
-def normalize_images(images):
-    return images.type(torch.float32) / 255.
-
+    for token_ids in tokenized_reports:
+        for token_id in token_ids:
+            if token_id in token_counts:
+                token_counts[token_id] += 1
+            else:
+                token_counts[token_id] = 1
+                
+    return token_counts

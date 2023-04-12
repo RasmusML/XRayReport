@@ -1,6 +1,0 @@
-model: chex1
-size: 10
-epochs: 30
-lr: 0.001
-batch_size: 128
-weight_decay: 0
