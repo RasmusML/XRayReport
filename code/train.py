@@ -57,7 +57,7 @@ def main(args):
     vocabulary = build_vocabulary([token for tokens in tokenized_reports for token in tokens])
     token2id, _ = map_token_and_id(vocabulary)
 
-    logging.info(f"loading module {model_name}...")
+    logging.info(f"loading model {model_name}...")
 
     # load models
     if model_name == "chex1":

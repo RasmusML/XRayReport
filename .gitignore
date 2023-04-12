@@ -9,7 +9,7 @@ results/
 data/processed
 
 models/*
-!model/chexnet
+!models/chexnet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
