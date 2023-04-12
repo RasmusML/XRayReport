@@ -184,7 +184,7 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=640, context_size=1024, n_transformer_layers=1, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, hidden_dim=960, context_size=1024, n_transformer_layers=1, freeze_embeddings=False):
         super().__init__()
 
         assert n_transformer_layers >= 1
@@ -502,12 +502,13 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
         logging.info(f"Epoch {t+1} train loss: {train_loss:.3f}, validation loss: {validation_loss:.3f}")
 
         if (t+1) % checkpoint_save_freq == 0:
+            torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
+
             references, candidates = prepare_for_evaluation(model, validation_dataset, token2id, id2token, early_exit=2)
             bleu = bleu_score(references, candidates)
             results["validation_bleu"].append(bleu)
-            logging.info(f"Epoch {t+1} BLEU: {bleu}")
 
-            torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
+            logging.info(f"Epoch {t+1} BLEU: {bleu}")
     
     
     torch.save(model.state_dict(), os.path.join("models", model_name, "model.pt"))

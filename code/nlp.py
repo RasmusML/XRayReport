@@ -5,19 +5,20 @@ import numpy as np
 from nltk.translate.bleu_score import corpus_bleu
 
 
-def prepare_for_evaluation(model, dataset, token2id, id2token, max_length=200, log_every=5, early_exit=10):
+def prepare_for_evaluation(model, dataset, token2id, id2token, device, max_length=200, log_every=5, early_exit=10):
     references = []
     candidates = []
 
     for i, (xray, token_ids, _) in enumerate(dataset):
+        xray = xray.to(device)
+        token_ids = token_ids.to(device)
+
         if i == early_exit:
             break
         
         if log_every > 0 and i % log_every == 0:
             logging.info(f"sample {i}")
         
-        emit = model.cached_emitter(xray)
-
         target = [id2token[token] for token in token_ids[1:-1]]
         references.append([target])
 
@@ -47,8 +48,9 @@ def greedy_search(model, xray, token2id, max_length=200):
     emit = model.cached_emitter(xray)
 
     for _ in range(1, max_length):
-        scores = emit(torch.tensor(token_ids))
-        token_id = torch.argmax(scores).item()
+        t_token_ids = torch.tensor(token_ids).to(xray.device)
+        scores = emit(t_token_ids)
+        token_id = torch.argmax(scores).detach().cpu().item()
         token_ids.append(token_id)
 
         if token_id == token2id["[END]"]:
@@ -64,9 +66,10 @@ def prob_sample(model, xray, token2id, max_length=200):
     emit = model.cached_emitter(xray)
 
     for _ in range(1, max_length):
-        scores = emit(torch.tensor(token_ids))
+        t_token_ids = torch.tensor(token_ids).to(xray.device)
+        scores = emit(t_token_ids)
             
-        p = F.softmax(scores, dim=-1).detach().numpy().astype(np.float64)
+        p = F.softmax(scores, dim=-1).detach().cpu().numpy().astype(np.float64)
         p /= np.sum(p)
 
         token_id = torch.tensor(np.random.choice(len(p), p=p))
