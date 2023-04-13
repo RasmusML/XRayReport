@@ -471,7 +471,7 @@ def make_model_dirs(model_name):
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
-          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200):
+          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200, bleu_eval_freq=5, bleu_max_samples=5, examples_to_show=3):
     
     make_model_dirs(model_name)
 
@@ -503,10 +503,25 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
 
         if (t+1) % checkpoint_save_freq == 0:
             torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
+            logging.info(f"Saved model at epoch {t+1}")
 
-            bleu = compute_bleu(model, validation_dataset, token2id, id2token, device=device, early_exit=10)
+        if (t+1) % bleu_eval_freq == 0:
+            references, candidates = prepare_for_evaluation(model, validation_dataset, token2id, id2token, device=device, early_exit=bleu_max_samples)
+            
+            # get some feedback during training
+            for i in range(min(examples_to_show, len(references))):
+                example_truth = references[i][0]
+                example_prediction = candidates[i]
+
+                logging.info("True and predicted report:")
+                logging.info(f"true: {tokens_to_text(example_truth)}")
+                logging.info(f"pred: {tokens_to_text(example_prediction)}")
+                logging.info("")
+
+
+            bleu = bleu_score(references, candidates)
+
             results["validation_bleu"].append(bleu)
-
             logging.info(f"Epoch {t+1} BLEU: {bleu}")
     
     

@@ -1,15 +1,19 @@
+# debug files
 dev.py
 tmp.ipynb
+
+# common folders
 raw/
-
-.vscode/
-
 runs/
+dump/
 results/
 data/processed
 
 models/*
 !models/chexnet
+
+.vscode/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -5,20 +5,21 @@ import numpy as np
 from nltk.translate.bleu_score import corpus_bleu
 
 
-def prepare_for_evaluation(model, dataset, token2id, id2token, device=None, max_length=200, log_every=5, early_exit=10):
+def prepare_for_evaluation(model, dataset, token2id, id2token, device=None, max_length=200, log_every=5, early_exit=-1):
     references = []
     candidates = []
 
     for i, (xray, token_ids, _) in enumerate(dataset):
         
-        if device:
-            xray = xray.to(device)
-
         if i == early_exit:
             break
+
+        if device:
+            xray = xray.to(device)
         
         if log_every > 0 and i % log_every == 0:
-            logging.info(f"passing sample {i}")
+            total_size = len(dataset) if early_exit == -1 else min(early_exit, len(dataset))
+            logging.info(f"passing sample {i}/{total_size}")
         
         target = [id2token[token] for token in token_ids[1:-1]]
         references.append([target])
@@ -42,7 +43,7 @@ def bleu_score(references, candidates):
     return corpus_bleu(references, candidates, weights=weights)
 
 
-def compute_bleu(model, dataset, token2id, id2token, device=None, max_length=200, early_exit=5):
+def compute_bleu(model, dataset, token2id, id2token, device=None, max_length=200, early_exit=-1):
     references, candidates = prepare_for_evaluation(model, dataset, token2id, id2token, device=device, max_length=max_length, early_exit=early_exit)
     bleu = bleu_score(references, candidates)
     return bleu

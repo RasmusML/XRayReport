@@ -6,6 +6,7 @@ from utils import *
 from dataset import *
 from plots import *
 from models import *
+from nlp import *
 
 import stanza
 import logging
@@ -15,16 +16,12 @@ import os
 import torch
 from torch import optim
 
-
-REPORT_PATH = "./data/raw/reports"
-IMAGE_PATH = "./data/raw/images"
-
 """
 Supported Configs
 -----------------
 {
     "data": {
-        "size": 10,
+        "size": 1000,
         "preprocessed_images": "data/processed/chex1_images.pt",
         "split": [0.8, 0.1, 0.1] # train, validation, test
     },
@@ -33,11 +30,15 @@ Supported Configs
         "batch_size": 32,
         "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
         "weighted_loss": True
-        "checkpoint_save_freq": 100
+        "checkpoint_save_freq": 100,
+        ""bleu_eval_freq": 50,
     },
 }
 
 """
+
+REPORT_PATH = "./data/raw/reports"
+IMAGE_PATH = "./data/raw/images"
 
 def main(args):
     logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
@@ -56,7 +57,7 @@ def main(args):
     tokenized_reports = reports.apply(lambda text : tokenize(text, tokenizer))
 
     vocabulary = build_vocabulary([token for tokens in tokenized_reports for token in tokens])
-    token2id, _ = map_token_and_id(vocabulary)
+    token2id, id2token = map_token_and_id(vocabulary)
 
     logging.info(f"loading model {model_name}...")
 
@@ -78,6 +79,7 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 5,
+                "bleu_eval_freq": 5
             },
         }
 
@@ -92,11 +94,12 @@ def main(args):
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 2400,
+                "epochs": 600,
                 "batch_size": 128,
-                "optimizer": optim.Adam(model.parameters(), lr=0.0001),
+                "optimizer": optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 100,
+                "bleu_eval_freq": 50
             },
         }
     elif model_name == "playground":
@@ -113,6 +116,7 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 5,
+                "bleu_eval_freq": 5
             },
         }
 
@@ -130,6 +134,7 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 100,
+                "bleu_eval_freq": 5
             },
         }
 
@@ -167,7 +172,7 @@ def main(args):
 
     train_dataset = XRayDataset(images[train_start:train_end], tokenized_reports[train_start:train_end], token2id)
     validation_dataset = XRayDataset(images[validation_start:validation_end], tokenized_reports[validation_start:validation_end], token2id)
-    test_dataset = XRayDataset(images[test_start:test_end], tokenized_reports[test_start:test_end], token2id) # @TODO: WIP
+    test_dataset = XRayDataset(images[test_start:test_end], tokenized_reports[test_start:test_end], token2id)
 
     if train_config["weighted_loss"]:
         token_occurencies = count_token_occurences(tokenized_reports)
@@ -178,9 +183,16 @@ def main(args):
             loss_weights[token2id[token]] = 1 / occurencies
 
 
-
     logging.info("training...")
-    train(model_name, model, vocabulary, train_dataset, validation_dataset, batch_size=train_config["batch_size"], epochs=train_config["epochs"], optimizer=train_config["optimizer"], loss_weights=loss_weights, checkpoint_save_freq=train_config["checkpoint_save_freq"])
+    train(model_name, model, vocabulary, train_dataset, validation_dataset,
+          batch_size=train_config["batch_size"], epochs=train_config["epochs"], optimizer=train_config["optimizer"], 
+          loss_weights=loss_weights, checkpoint_save_freq=train_config["checkpoint_save_freq"], bleu_eval_freq=train_config["bleu_eval_freq"])
+    
+
+    logging.info("computing BLEU score for test set")
+    test_bleu = compute_bleu(model, test_dataset, token2id, id2token)
+    logging.info(f"test BLEU score: {test_bleu}")
+    save_dict({ "bleu": test_bleu }, os.path.join("results", model_name, "test_result.pkl"))
 
 
 if __name__ == "__main__":
