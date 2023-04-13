@@ -504,8 +504,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
         if (t+1) % checkpoint_save_freq == 0:
             torch.save(model.state_dict(), os.path.join("models", model_name, f"model_{t+1}.pt"))
 
-            references, candidates = prepare_for_evaluation(model, validation_dataset, token2id, id2token, early_exit=2)
-            bleu = bleu_score(references, candidates)
+            bleu = compute_bleu(model, validation_dataset, token2id, id2token, device=device, early_exit=10)
             results["validation_bleu"].append(bleu)
 
             logging.info(f"Epoch {t+1} BLEU: {bleu}")
@@ -513,15 +512,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
     
     torch.save(model.state_dict(), os.path.join("models", model_name, "model.pt"))
 
-    results["test_loss"] = 5 # @TODO: WIP
-    """ # @TODO: WIP
-    logging.info("evaluating...")
-    result_path = os.path.join("results", model_name, "result.pkl")
-    result = load_dict(result_path)
-    result["test_loss"] = evaluate(model, test_dataset, token2id)
-    save_dict(result, result_path)
-    """
-    save_dict(results, os.path.join("results", model_name, "result.pkl"))
+    save_dict(results, os.path.join("results", model_name, "train_result.pkl"))
 
 
 def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_weights=None, disable_tqdm=True):
@@ -537,7 +528,7 @@ def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_w
         y_pred = model(reports, xrays)
 
         # Since a LM predicts the next token, we need shift the tokens. Tokens "!   !" should be ignored.
-        # y_est:  <hello>   <sailor>  <!>       <[END]>  !misc!
+        # y_pred: <hello>   <sailor>  <!>       <[END]>  !misc!
         # y_true: !Start!   <hello>   <sailor>  <!>      <[End]>
         y_pred_align = y_pred[:,:-1,:]
         y_true_align = reports[:,1:]

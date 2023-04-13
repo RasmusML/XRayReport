@@ -5,24 +5,25 @@ import numpy as np
 from nltk.translate.bleu_score import corpus_bleu
 
 
-def prepare_for_evaluation(model, dataset, token2id, id2token, device, max_length=200, log_every=5, early_exit=10):
+def prepare_for_evaluation(model, dataset, token2id, id2token, device=None, max_length=200, log_every=5, early_exit=10):
     references = []
     candidates = []
 
     for i, (xray, token_ids, _) in enumerate(dataset):
-        xray = xray.to(device)
-        token_ids = token_ids.to(device)
+        
+        if device:
+            xray = xray.to(device)
 
         if i == early_exit:
             break
         
         if log_every > 0 and i % log_every == 0:
-            logging.info(f"sample {i}")
+            logging.info(f"passing sample {i}")
         
         target = [id2token[token] for token in token_ids[1:-1]]
         references.append([target])
 
-        #generated_ids = beam_search(model, token2id, beam_width=1, max_length=max_length)[0]
+        #generated_ids = beam_search(model, token2id, beam_width=3, max_length=max_length)[0]
         generated_ids = greedy_search(model, xray, token2id, max_length=max_length)
         generated = [id2token[token] for token in generated_ids[1:-1]]
         candidates.append(generated)
@@ -39,6 +40,12 @@ def bleu_score(references, candidates):
         (0.25,0.25,0.25,0.25)
     ]
     return corpus_bleu(references, candidates, weights=weights)
+
+
+def compute_bleu(model, dataset, token2id, id2token, device=None, max_length=200, early_exit=5):
+    references, candidates = prepare_for_evaluation(model, dataset, token2id, id2token, device=device, max_length=max_length, early_exit=early_exit)
+    bleu = bleu_score(references, candidates)
+    return bleu
 
 
 def greedy_search(model, xray, token2id, max_length=200):

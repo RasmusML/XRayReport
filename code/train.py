@@ -108,11 +108,11 @@ def main(args):
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 1000,
+                "epochs": 10,
                 "batch_size": 32,
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
-                "checkpoint_save_freq": 100,
+                "checkpoint_save_freq": 5,
             },
         }
 

@@ -8,6 +8,7 @@ import pickle
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
+
 def save_dict(dictionary, file):
     with open(file, "wb") as f:
         pickle.dump(dictionary, f)
