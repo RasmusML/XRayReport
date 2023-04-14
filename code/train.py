@@ -92,6 +92,7 @@ def main(args):
 
         config = {
             "data": {
+                "size": 10, # @TODO: remove
                 "preprocessed_images": "data/processed/chex2_images.pt",
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
@@ -183,6 +184,10 @@ def main(args):
     train_dataset = XRayDataset(images[train_start:train_end], tokenized_reports[train_start:train_end], token2id)
     validation_dataset = XRayDataset(images[validation_start:validation_end], tokenized_reports[validation_start:validation_end], token2id)
     test_dataset = XRayDataset(images[test_start:test_end], tokenized_reports[test_start:test_end], token2id)
+
+    logging.info(f"train dataset size: {len(train_dataset)}")
+    logging.info(f"validation dataset size: {len(validation_dataset)}")
+    logging.info(f"test dataset size: {len(test_dataset)}")
 
     if train_config["weighted_loss"]:
         token_occurencies = count_token_occurences(tokenized_reports)

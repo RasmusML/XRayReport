@@ -5,7 +5,7 @@ import numpy as np
 from nltk.translate.bleu_score import corpus_bleu
 
 
-def prepare_for_evaluation(model, dataset, token2id, id2token, device=None, max_length=200, log_every=5, early_exit=-1):
+def prepare_for_evaluation(model, dataset, token2id, id2token, device=None, max_length=200, log_every=15, early_exit=-1):
     references = []
     candidates = []
 

@@ -1,5 +1,6 @@
 import os
 import math
+import copy
 
 from tqdm import tqdm
 import torch
@@ -184,44 +185,35 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=960, context_size=1024, n_transformer_layers=1, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=8, n_heads=10, freeze_embeddings=False):
         super().__init__()
 
-        assert n_transformer_layers >= 1
+        assert n_layers >= 1
 
-        self.hidden_dim = hidden_dim
-        self.context_size = context_size
-        self.n_transformer_layers = n_transformer_layers
+        self.n_layers = n_layers
+        self.context_dim = context_dim
         self.vocab_size = pretrained_embeddings.shape[0]
         self.embedding_dim = pretrained_embeddings.shape[1]
 
-        self.context_to_hidden = nn.Linear(context_size, hidden_dim)
-        self.embedding_to_hidden = nn.Linear(self.embedding_dim, hidden_dim)
-
         self.positional_encoding = PositionalEncoding(self.embedding_dim, dropout=0.1, max_len=5000)
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
-        self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
-        
-        if self.n_transformer_layers > 1:
-            self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
-            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
+        self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
 
-        self.linear_vocab_dist = nn.Linear(self.hidden_dim, self.vocab_size)
+        if n_layers > 1:
+            self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.embedding_dim, vdim=self.embedding_dim, n_heads=n_heads, batch_first=True)
+            self.decoder_layerN = MyTransFormerDecoder(self.decoder_layerN_type, n_layers=self.n_layers-1)
+
+        self.linear_vocab_dist = nn.Linear(self.embedding_dim, self.vocab_size)
 
     def forward(self, token_ids, context):
-        context = self.context_to_hidden(context)
-
         mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
 
         x = self.embedding(token_ids)
         x = self.positional_encoding(x)
-        x = self.embedding_to_hidden(x)
+        x = self.decoder_layer1(x, context, target_attn_mask=mask)
 
-        #x = self.decoder_layer1(x, context, tgt_is_causal=True)
-        x = self.decoder_layer1(x, context, tgt_mask=mask)
-
-        if self.n_transformer_layers > 1:
-            x = self.decoder_layerN(x, context, tgt_mask=mask)
+        if self.n_layers > 1:
+            x = self.decoder_layerN(x, x, target_attn_mask=mask)
 
         return self.linear_vocab_dist(x)
 
@@ -242,11 +234,11 @@ class CheXNetEncoder2(nn.Module):
     
 
 class CheXTransformerNet(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=640, n_transformer_layers=8):
+    def __init__(self, pretrained_embeddings):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
-        self.decoder = TransformerDecoder(pretrained_embeddings, hidden_dim=hidden_dim, n_transformer_layers=n_transformer_layers)
+        self.decoder = TransformerDecoder(pretrained_embeddings)
         
     def forward(self, text, context):
         output = self.decoder(text, context)
@@ -357,6 +349,92 @@ class XRayViTModel(nn.Module):
             return F.log_softmax(out[0,-1,:], dim=-1)
         
         return emitter
+    
+
+#
+# retired
+#
+
+class TransformerDecoderOld(nn.Module):
+    def __init__(self, pretrained_embeddings, hidden_dim=960, context_size=1024, n_transformer_layers=1, freeze_embeddings=False):
+        super().__init__()
+
+        assert n_transformer_layers >= 1
+
+        self.hidden_dim = hidden_dim
+        self.context_size = context_size
+        self.n_transformer_layers = n_transformer_layers
+        self.vocab_size = pretrained_embeddings.shape[0]
+        self.embedding_dim = pretrained_embeddings.shape[1]
+
+        self.context_to_hidden = nn.Linear(context_size, hidden_dim)
+        self.embedding_to_hidden = nn.Linear(self.embedding_dim, hidden_dim)
+
+        self.positional_encoding = PositionalEncoding(self.embedding_dim, dropout=0.1, max_len=5000)
+        self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
+        self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
+        
+        if self.n_transformer_layers > 1:
+            self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, batch_first=True)
+            self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
+
+        self.linear_vocab_dist = nn.Linear(self.hidden_dim, self.vocab_size)
+
+    def forward(self, token_ids, context):
+        context = self.context_to_hidden(context)
+
+        mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
+
+        x = self.embedding(token_ids)
+        x = self.positional_encoding(x)
+        x = self.embedding_to_hidden(x)
+
+        #x = self.decoder_layer1(x, context, tgt_is_causal=True)
+        x = self.decoder_layer1(x, context, tgt_mask=mask)
+
+        if self.n_transformer_layers > 1:
+            x = self.decoder_layerN(x, context, tgt_mask=mask)
+
+        return self.linear_vocab_dist(x)
+
+
+
+class CheXNetEncoder2Old(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.chexnet = load_CheXNet()
+
+    def forward(self, xrays):
+        xrays = xrays.unsqueeze(1).expand(-1, 3, -1, -1)
+        xrays = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(xrays)
+        x = self.chexnet.features(xrays)
+        x = x.flatten(start_dim=-2) # (batch_size, 1024, 7, 7) -> (batch_size, 1024, 49)
+        x = x.permute(0, 2, 1)      # (batch_size, 1024, 49) -> (batch_size, 49, 1024)
+        return x
+    
+
+class CheXTransformerNetOld(nn.Module):
+    def __init__(self, pretrained_embeddings, hidden_dim=640, n_transformer_layers=8):
+        super().__init__()
+
+        self.encoder = CheXNetEncoder2Old()
+        self.decoder = TransformerDecoderOld(pretrained_embeddings, hidden_dim=hidden_dim, n_transformer_layers=n_transformer_layers)
+        
+    def forward(self, text, context):
+        output = self.decoder(text, context)
+        return output
+    
+    def preprocess(self, images):
+        return process_to_fixed_context(self.encoder, images)
+    
+    def cached_emitter(self, context):
+        def emitter(tokens):
+            with torch.no_grad():
+                self.eval()
+                out = self.forward(tokens[None], context[None]) # add batch dim
+                return F.log_softmax(out[0,-1,:], dim=-1)
+        return emitter
+    
    
 #
 # shared
@@ -366,6 +444,70 @@ def generate_square_subsequent_mask(sz):
     mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
     mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
     return mask
+
+class MyTransFormerDecoder(nn.Module):
+    def __init__(self, decoder_layer, n_layers):
+        super().__init__()
+        
+        self.layers = _get_clones(decoder_layer, n_layers)
+
+    def forward(self, input, context, target_attn_mask=None, context_attn_mask=None):
+        for layer in self.layers:
+            input = layer(input, context, target_attn_mask, context_attn_mask)
+        return input
+
+
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
+
+class MyTransformerDecoderLayer(nn.Module):
+    def __init__(self, qdim, kdim, vdim, n_heads, dropout=0.1, layer_norm_eps=1e-5, dim_feedforward=2048, batch_first=True):
+        super().__init__()
+
+        # Get set in forward()
+        self.masked_attn_weights = None
+        self.attn_weights = None
+
+        # Self-attention
+        self.masked_self_attn = nn.MultiheadAttention(embed_dim=qdim, num_heads=n_heads, dropout=dropout, batch_first=batch_first)
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(qdim, eps=layer_norm_eps)
+
+        # Multihead attention
+        self.multihead_attn = nn.MultiheadAttention(embed_dim=qdim, num_heads=n_heads, dropout=dropout, kdim=kdim, vdim=vdim, batch_first=batch_first)
+        self.dropout2 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(qdim, eps=layer_norm_eps)
+
+        # FFN
+        self.linear1 = nn.Linear(qdim, dim_feedforward)
+        self.activation = nn.ReLU()
+        self.dropout3 = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, qdim)
+        self.dropout4 = nn.Dropout(dropout)
+        self.norm3 = nn.LayerNorm(qdim, eps=layer_norm_eps)
+
+    def forward(self, input, context, target_attn_mask=None, context_attn_mask=None):
+        # Self-attention
+        x1, self.masked_attn_weights = self.masked_self_attn(input, input, input, attn_mask=target_attn_mask)
+        x1 = self.dropout1(x1)
+        x2 = self.norm1(x1 + input)
+
+        # Multihead attention
+        x3, self.multihead_attn_weights = self.multihead_attn(x2, context, context, context_attn_mask)
+        x3 = self.dropout2(x3)
+        x4 = self.norm2(x3 + x2)
+
+        # FFN
+        x5 = self.activation(self.linear1(x4))
+        x5 = self.dropout3(x5)
+
+        x6 = self.linear2(x5)
+        x6 = self.dropout4(x6)
+
+        x9 = self.norm3(x6 + x4)
+
+        return x9
 
 
 class PositionalEncoding(nn.Module):
@@ -471,7 +613,7 @@ def make_model_dirs(model_name):
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
-          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200, bleu_eval_freq=5, bleu_max_samples=-1, examples_to_show=3, device=None):
+          epochs, batch_size, optimizer, loss_weights=None, disable_tqdm=True, checkpoint_save_freq=200, bleu_eval_freq=5, bleu_max_samples=-1, examples_to_show=3, device=None):
     
     make_model_dirs(model_name)
 
