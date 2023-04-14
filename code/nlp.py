@@ -136,3 +136,23 @@ def beam_search(model, xray, token2id, beam_width=5, max_length=100):
     done.extend(beams)
 
     return done
+
+
+def compute_most_similiar(token_id, embeddings, n_most_similar=1, eps=1e-5):
+    assert n_most_similar > 0
+
+    cosine_simularities = torch.zeros(embeddings.shape[0])
+    embed = embeddings[token_id]
+
+    for i, other in enumerate(embeddings):
+        embed_eps = embed.double() + eps
+        other_eps = other.double() + eps
+        cosine_simularities[i] = torch.dot(embed_eps, other_eps) / (torch.linalg.vector_norm(embed_eps) * torch.linalg.vector_norm(other_eps))
+
+    values, indices = cosine_simularities.topk(n_most_similar + 1)
+
+    return [(id.item(), sim.item()) for id, sim in zip(indices[1:], values[1:])] # skip itself
+
+
+def similiar_convert(most_similiar, id2token):
+    return [(id2token[id], sim) for id, sim in most_similiar]

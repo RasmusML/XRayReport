@@ -213,7 +213,7 @@ class TransformerDecoder(nn.Module):
         x = self.decoder_layer1(x, context, target_attn_mask=mask)
 
         if self.n_layers > 1:
-            x = self.decoder_layerN(x, x, target_attn_mask=mask)
+            x = self.decoder_layerN(x, context, target_attn_mask=mask)
 
         return self.linear_vocab_dist(x)
 
@@ -467,7 +467,7 @@ class MyTransformerDecoderLayer(nn.Module):
 
         # Get set in forward()
         self.masked_attn_weights = None
-        self.attn_weights = None
+        self.multihead_attn_weights = None
 
         # Self-attention
         self.masked_self_attn = nn.MultiheadAttention(embed_dim=qdim, num_heads=n_heads, dropout=dropout, batch_first=batch_first)
@@ -487,14 +487,14 @@ class MyTransformerDecoderLayer(nn.Module):
         self.dropout4 = nn.Dropout(dropout)
         self.norm3 = nn.LayerNorm(qdim, eps=layer_norm_eps)
 
-    def forward(self, input, context, target_attn_mask=None, context_attn_mask=None):
+    def forward(self, input, memory, target_attn_mask=None, memory_attn_mask=None):
         # Self-attention
         x1, self.masked_attn_weights = self.masked_self_attn(input, input, input, attn_mask=target_attn_mask)
         x1 = self.dropout1(x1)
         x2 = self.norm1(x1 + input)
 
         # Multihead attention
-        x3, self.multihead_attn_weights = self.multihead_attn(x2, context, context, context_attn_mask)
+        x3, self.multihead_attn_weights = self.multihead_attn(x2, memory, memory, attn_mask=memory_attn_mask)
         x3 = self.dropout2(x3)
         x4 = self.norm2(x3 + x2)
 

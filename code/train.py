@@ -92,7 +92,6 @@ def main(args):
 
         config = {
             "data": {
-                "size": 10, # @TODO: remove
                 "preprocessed_images": "data/processed/chex2_images.pt",
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
