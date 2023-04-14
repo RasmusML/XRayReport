@@ -200,7 +200,7 @@ class TransformerDecoder(nn.Module):
         self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
 
         if n_layers > 1:
-            self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.embedding_dim, vdim=self.embedding_dim, n_heads=n_heads, batch_first=True)
+            self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
             self.decoder_layerN = MyTransFormerDecoder(self.decoder_layerN_type, n_layers=self.n_layers-1)
 
         self.linear_vocab_dist = nn.Linear(self.embedding_dim, self.vocab_size)
@@ -229,7 +229,7 @@ class CheXNetEncoder2(nn.Module):
         xrays = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))(xrays)
         x = self.chexnet.features(xrays)
         x = x.flatten(start_dim=-2) # (batch_size, 1024, 7, 7) -> (batch_size, 1024, 49)
-        x = x.permute(0, 2, 1)      # (batch_size, 1024, 49) -> (batch_size, 49, 1024)
+        x = x.permute(0, 2, 1)      # (batch_size, 1024, 49)   -> (batch_size, 49, 1024)
         return x
     
 
@@ -505,9 +505,9 @@ class MyTransformerDecoderLayer(nn.Module):
         x6 = self.linear2(x5)
         x6 = self.dropout4(x6)
 
-        x9 = self.norm3(x6 + x4)
+        x7 = self.norm3(x6 + x4)
 
-        return x9
+        return x7
 
 
 class PositionalEncoding(nn.Module):
