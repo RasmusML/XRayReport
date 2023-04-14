@@ -31,7 +31,8 @@ Supported Configs
         "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
         "weighted_loss": True
         "checkpoint_save_freq": 100,
-        ""bleu_eval_freq": 50,
+        "bleu_eval_freq": 50,
+        "bleu_max_samples": 10
     },
 }
 
@@ -79,7 +80,8 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 5,
-                "bleu_eval_freq": 5
+                "bleu_eval_freq": 5,
+                "bleu_max_samples": 10,
             },
         }
 
@@ -99,7 +101,8 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 100,
-                "bleu_eval_freq": 50
+                "bleu_eval_freq": 50,
+                "bleu_max_samples": 200,
             },
         }
     elif model_name == "playground":
@@ -116,7 +119,8 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 5,
-                "bleu_eval_freq": 5
+                "bleu_eval_freq": 5,
+                "bleu_max_samples": 10,
             },
         }
 
@@ -134,7 +138,8 @@ def main(args):
                 "optimizer": optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 100,
-                "bleu_eval_freq": 5
+                "bleu_eval_freq": 5,
+                "bleu_max_samples": 200,
             },
         }
 
@@ -151,6 +156,11 @@ def main(args):
         data_size = min(data_config["size"], len(reports))
     else:
         data_size = len(reports)
+
+    if "bleu_max_samples" in train_config:
+        bleu_max_samples = train_config["bleu_max_samples"]
+    else:
+        bleu_max_samples = -1
 
     # some reports may have been filtered due to empty field in the report.
     # Thus, use the index to filter the images
@@ -182,15 +192,18 @@ def main(args):
         for token, occurencies in token_occurencies.items():
             loss_weights[token2id[token]] = 1 / occurencies
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     logging.info("training...")
     train(model_name, model, vocabulary, train_dataset, validation_dataset,
           batch_size=train_config["batch_size"], epochs=train_config["epochs"], optimizer=train_config["optimizer"], 
-          loss_weights=loss_weights, checkpoint_save_freq=train_config["checkpoint_save_freq"], bleu_eval_freq=train_config["bleu_eval_freq"])
+          loss_weights=loss_weights, checkpoint_save_freq=train_config["checkpoint_save_freq"], bleu_eval_freq=train_config["bleu_eval_freq"], 
+          bleu_max_samples=bleu_max_samples, 
+          device=device)
     
 
     logging.info("computing BLEU score for test set")
-    test_bleu = compute_bleu(model, test_dataset, token2id, id2token)
+    test_bleu = compute_bleu(model, test_dataset, token2id, id2token, device=device)
     logging.info(f"test BLEU score: {test_bleu}")
     save_dict({ "bleu": test_bleu }, os.path.join("results", model_name, "test_result.pkl"))
 

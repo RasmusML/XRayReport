@@ -242,7 +242,7 @@ class CheXNetEncoder2(nn.Module):
     
 
 class CheXTransformerNet(nn.Module):
-    def __init__(self, pretrained_embeddings, hidden_dim=960, n_transformer_layers=8):
+    def __init__(self, pretrained_embeddings, hidden_dim=640, n_transformer_layers=8):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
@@ -471,11 +471,13 @@ def make_model_dirs(model_name):
 
 
 def train(model_name, model, vocabulary, train_dataset, validation_dataset, 
-          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200, bleu_eval_freq=5, bleu_max_samples=5, examples_to_show=3):
+          epochs, batch_size, optimizer, loss_weights, disable_tqdm=True, checkpoint_save_freq=200, bleu_eval_freq=5, bleu_max_samples=-1, examples_to_show=3, device=None):
     
     make_model_dirs(model_name)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
     model = model.to(device)
 
     if loss_weights is not None:

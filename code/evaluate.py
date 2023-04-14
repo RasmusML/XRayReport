@@ -145,9 +145,6 @@ def main(args):
     candidates = [" ".join(candidate) for candidate in candidates]
     references = [" ".join(ref[0]) for ref in references]
 
-    print(references)
-    print(candidates)
-
     refs = {i: [ref] for i, ref in enumerate(references)}
     hyps = {i: [candidate] for i, candidate in enumerate(candidates)}
 
