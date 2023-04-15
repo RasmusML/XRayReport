@@ -185,7 +185,7 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=8, n_heads=10, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=10, freeze_embeddings=False):
         super().__init__()
 
         assert n_layers >= 1
@@ -335,17 +335,17 @@ class XRayViTModel(nn.Module):
     def preprocess(self, images):
         return images
     
-    def cached_emitter(model, image):
+    def cached_emitter(self, image):
     # persistent state to speed-up sampling
         with torch.no_grad():
-            eval()
-            context = model.encoder(image[None]).detach()
+            self.eval()
+            context = self.encoder(image[None]).detach()
 
         # define emitter
         def emitter(tokens):
             with torch.no_grad():
-                model.eval()
-                out = model.decoder(tokens[None], context) # add batch dim
+                self.eval()
+                out = self.decoder(tokens[None], context) # add batch dim
             return F.log_softmax(out[0,-1,:], dim=-1)
         
         return emitter
