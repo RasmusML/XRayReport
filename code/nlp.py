@@ -50,7 +50,7 @@ def compute_bleu(model, dataset, token2id, id2token, device=None, max_length=200
 
 
 def greedy_search(model, xray, token2id, max_length=200):
-    start_token = token2id["[START]"]
+    start_token = token2id["<START>"]
     token_ids = [start_token]
 
     emit = model.cached_emitter(xray)
@@ -61,14 +61,14 @@ def greedy_search(model, xray, token2id, max_length=200):
         token_id = torch.argmax(scores).detach().cpu().item()
         token_ids.append(token_id)
 
-        if token_id == token2id["[END]"]:
+        if token_id == token2id["<END>"]:
             break
 
     return token_ids
 
 
 def prob_sample(model, xray, token2id, max_length=200):
-    start_token = token2id["[START]"]
+    start_token = token2id["<START>"]
     token_ids = [start_token]
 
     emit = model.cached_emitter(xray)
@@ -83,14 +83,14 @@ def prob_sample(model, xray, token2id, max_length=200):
         token_id = torch.tensor(np.random.choice(len(p), p=p))
         token_ids.append(token_id.item())
 
-        if token_id == token2id["[END]"]:
+        if token_id == token2id["<END>"]:
             break
 
     return token_ids
 
 
 def beam_search(model, xray, token2id, beam_width=5, max_length=100):
-    start_token = token2id["[START]"]
+    start_token = token2id["<START>"]
 
     beams = [(0, [start_token]) for _ in range(beam_width)] # (score, tokens)
     done = []
@@ -130,8 +130,8 @@ def beam_search(model, xray, token2id, beam_width=5, max_length=100):
             new_token_ids = all_token_ids[beam_id] + [token_id.item()]
             beams[idx] = (new_score, new_token_ids)
 
-        done += [(score, token_ids) for (score, token_ids) in beams if token_ids[-1] == token2id["[END]"]]
-        beams = [(score, token_ids) for (score, token_ids) in beams if token_ids[-1] != token2id["[END]"]]
+        done += [(score, token_ids) for (score, token_ids) in beams if token_ids[-1] == token2id["<END>"]]
+        beams = [(score, token_ids) for (score, token_ids) in beams if token_ids[-1] != token2id["<END>"]]
 
     done.extend(beams)
 

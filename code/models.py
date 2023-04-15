@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.models import vgg19, VGG19_Weights, vit_b_16, ViT_B_16_Weights
 from torchvision.transforms import Normalize
 
+import pickle 
+
 import numpy as np
 
 from utils import save_dict
@@ -125,8 +127,7 @@ class CheXNetEncoder1(nn.Module):
     
 
 class CheXNetDecoder1(nn.Module):
-    def __init__(self, word_embeddings, hidden_size=256, freeze_embeddings=False
-                 ):
+    def __init__(self, word_embeddings, hidden_size=256, freeze_embeddings=False):
         super().__init__()
 
         self.linear1 = nn.Linear(1024, hidden_size)
@@ -547,17 +548,28 @@ def process_to_fixed_context(encoder, images, batch_size=16):
 # Embeddings
 #
 
-def download_glove(embedding_name="glove-wiki-gigaword-300"):
+def load_pubmed_embeddings_IU_xray_pretrained():
+    with open('embeddings/IU_xray_pretrained.pickle', 'rb') as handle:
+        embeddings = pickle.load(handle)
+
+    embeddings["<START>"] = embeddings.pop("startseq")
+    embeddings["<END>"]   = embeddings.pop("endseq")
+    embeddings["<UNK>"]   = embeddings.pop("UNK")
+
+    return embeddings, 400
+
+
+def load_bundled_glove_embeddings(embedding_name="glove-wiki-gigaword-300"):
     import gensim.downloader
     glove_vectors = gensim.downloader.load(embedding_name)
-    return glove_vectors
+    return glove_vectors, len(next(iter(glove_vectors)))
 
 
-def get_word_embeddings(token2id, glove_vectors):
-    word_embeddings = np.zeros((len(token2id), glove_vectors.vector_size))
+def prepare_word_embeddings(token2id, vectors, embed_dim):
+    word_embeddings = np.zeros((len(token2id), embed_dim))
     for token, id in token2id.items():
-        if token in glove_vectors:
-            word_embeddings[id] = glove_vectors[token]
+        if token in vectors:
+            word_embeddings[id] = vectors[token]
     return word_embeddings
 
 
@@ -566,7 +578,7 @@ def get_word_embeddings(token2id, glove_vectors):
 #
 
 def get_dataloader(dataset, token2id, shuffle=True, batch_size=16):
-    collate_fn = lambda input: report_collate_fn(token2id["[PAD]"], input)
+    collate_fn = lambda input: report_collate_fn(token2id["<PAD>"], input)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
 
@@ -582,7 +594,7 @@ class XRayDataset(Dataset):
     def __getitem__(self, idx):
         image = self.images[idx]
         report = self.reports.iloc[idx]
-        report = ["[START]"] + report + ["[END]"]
+        report = ["<START>"] + report + ["<END>"]
 
         report_length = len(report)
         report_ids = [self.token2id[token] for token in report]
@@ -677,7 +689,7 @@ def train(model_name, model, vocabulary, train_dataset, validation_dataset,
 def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_weights=None, disable_tqdm=True):
     train_losses = []
 
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"], weight=loss_weights)
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["<PAD>"], weight=loss_weights)
 
     model.train()
     for xrays, reports, _ in tqdm(train_dataloader, disable=disable_tqdm):
@@ -704,7 +716,7 @@ def train_one_epoch(model, train_dataloader, token2id, optimizer, device, loss_w
 
 
 def evaluate(model, test_dataloader, token2id, device, loss_weights=None, disable_tqdm=True):
-    criterion = nn.CrossEntropyLoss(ignore_index=token2id["[PAD]"], weight=loss_weights)
+    criterion = nn.CrossEntropyLoss(ignore_index=token2id["<PAD>"], weight=loss_weights)
 
     with torch.no_grad():
         model.eval()

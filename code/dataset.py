@@ -99,7 +99,7 @@ def tokenize(text, tokenizer):
 
 
 def build_vocabulary(tokens):
-    return set(["[UNK]", "[PAD]", "[START]", "[END]"]) | set(tokens)
+    return set(["<UNK>", "<PAD>", "<START>", "<END>"]) | set(tokens)
 
 
 def map_token_and_id(vocabulary):
