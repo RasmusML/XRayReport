@@ -186,31 +186,34 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=10, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=8, hidden_dim=800, freeze_embeddings=True):
         super().__init__()
 
         assert n_layers >= 1
 
+        self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.context_dim = context_dim
         self.vocab_size = pretrained_embeddings.shape[0]
         self.embedding_dim = pretrained_embeddings.shape[1]
 
         self.positional_encoding = PositionalEncoding(self.embedding_dim, dropout=0.1, max_len=5000)
+        self.linear_dim_expand = nn.Linear(self.embedding_dim, self.hidden_dim)
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
-        self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
+        self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
 
-        if n_layers > 1:
-            self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
+        if self.n_layers > 1:
+            self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
             self.decoder_layerN = MyTransFormerDecoder(self.decoder_layerN_type, n_layers=self.n_layers-1)
 
-        self.linear_vocab_dist = nn.Linear(self.embedding_dim, self.vocab_size)
+        self.linear_vocab_dist = nn.Linear(self.hidden_dim, self.vocab_size)
 
     def forward(self, token_ids, context):
         mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
 
         x = self.embedding(token_ids)
         x = self.positional_encoding(x)
+        x = self.linear_dim_expand(x)
         x = self.decoder_layer1(x, context, target_attn_mask=mask)
 
         if self.n_layers > 1:
@@ -239,6 +242,7 @@ class CheXTransformerNet(nn.Module):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
+        self.encoder_dropout = nn.Dropout2d(0.3)
         self.decoder = TransformerDecoder(pretrained_embeddings)
         
     def forward(self, text, context):
@@ -246,7 +250,7 @@ class CheXTransformerNet(nn.Module):
         return output
     
     def preprocess(self, images):
-        return process_to_fixed_context(self.encoder, images)
+        return process_to_fixed_context(self.encoder, self.encoder_dropout(images))
     
     def cached_emitter(self, context):
         def emitter(tokens):
