@@ -204,6 +204,7 @@ class TransformerDecoder(nn.Module):
 
         if self.n_layers > 1:
             self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
+            self.decoder_layerN = MyTransFormerDecoder(self.decoder_layerN_type, n_layers=self.n_layers-1)
 
         self.linear_vocab_dist = nn.Linear(self.hidden_dim, self.vocab_size)
 
