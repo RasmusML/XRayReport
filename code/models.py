@@ -186,7 +186,7 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=10, freeze_embeddings=False):
+    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=10, freeze_embeddings=True):
         super().__init__()
 
         assert n_layers >= 1
@@ -200,7 +200,7 @@ class TransformerDecoder(nn.Module):
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
         self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
 
-        if n_layers > 1:
+        if self.n_layers > 1:
             self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.embedding_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
             self.decoder_layerN = MyTransFormerDecoder(self.decoder_layerN_type, n_layers=self.n_layers-1)
 
@@ -239,6 +239,7 @@ class CheXTransformerNet(nn.Module):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
+        self.encoder_dropout = nn.Dropout2d(0.3)
         self.decoder = TransformerDecoder(pretrained_embeddings)
         
     def forward(self, text, context):
@@ -246,7 +247,7 @@ class CheXTransformerNet(nn.Module):
         return output
     
     def preprocess(self, images):
-        return process_to_fixed_context(self.encoder, images)
+        return process_to_fixed_context(self.encoder, self.encoder_dropout(images))
     
     def cached_emitter(self, context):
         def emitter(tokens):
