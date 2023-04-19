@@ -125,11 +125,11 @@ def main(args):
     elif model_name == "vit":
         config = {
             "data": {
-                #"size": 100,
+                "size": 100,
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 800,
+                "epochs": 80,
                 "batch_size": 32,
                 "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
@@ -187,7 +187,7 @@ def main(args):
         model = PlaygroundModel(len(vocabulary))
 
     elif model_name == "vit":
-        model = XRayViTModel(len(vocabulary))
+        model = XRayViTModel(word_embeddings)
 
     else:
         raise ValueError(f"model {model_name} not supported")

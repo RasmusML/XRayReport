@@ -296,45 +296,50 @@ class XRayViTEncoder(nn.Module):
     
 
 class XRayViTDecoder(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size, n_transformer_layers, pretrained_embeddings=None):
+    def __init__(self, hidden_size, n_transformer_layers, pretrained_embeddings):
         super().__init__()
 
         assert n_transformer_layers >= 0
+
+        self.vocab_size = pretrained_embeddings.shape[0]
+        self.hidden_size = hidden_size
+
+        self.context_to_hidden = nn.Linear(768, hidden_size)
         
         self.n_transformer_layers = n_transformer_layers
         self.positional_encoding = PositionalEncoding(hidden_size, dropout=0.1, max_len=5000)
 
-        if pretrained_embeddings:
-            self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=False)
-        else:
-            self.embedding = nn.Embedding(vocabulary_size, hidden_size)
-        
+        self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=False)
         self.decoder_layer1 = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
         
         if n_transformer_layers > 1:
             self.decoder_layerN_type = pm.TransformerDecoderLayer(d_model=hidden_size, nhead=8, batch_first=True)
             self.decoder_layerN = pm.TransformerDecoder(self.decoder_layerN_type, n_transformer_layers - 1)
 
-        self.linear = nn.Linear(hidden_size, vocabulary_size)
+        self.linear = nn.Linear(hidden_size, self.vocab_size)
 
-    def forward(self, input, context):
-        x = self.embedding(input)
+    def forward(self, token_ids, context):
+        mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
+
+        context = self.context_to_hidden(context)
+
+        x = self.embedding(token_ids)
         x = self.positional_encoding(x)
-        x = self.decoder_layer1(x, context, tgt_is_causal=True)
-        #x = self.decoder_layer1(x, context, tgt_mask=generate_square_subsequent_mask(input.size(1)))
+
+        x = self.decoder_layer1(x, context, tgt_mask=mask)
 
         if self.n_transformer_layers > 1:
-            x = self.decoder_layerN(x, context)
+            x = self.decoder_layerN(x, context, tgt_mask=mask)
 
         return self.linear(x)
 
 
 class XRayViTModel(nn.Module):
-    def __init__(self, vocabulary_size, hidden_size=768, n_transformer_layers=5):
+    def __init__(self, word_embeddings, hidden_size=400, n_transformer_layers=5):
         super().__init__()
 
         self.encoder = XRayViTEncoder()
-        self.decoder = XRayViTDecoder(vocabulary_size, hidden_size, n_transformer_layers=n_transformer_layers)
+        self.decoder = XRayViTDecoder(hidden_size, n_transformer_layers=n_transformer_layers, pretrained_embeddings=word_embeddings)
         
     def forward(self, text, images):
         context = self.encoder(images)
