@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 
 from torch.utils.data import DataLoader, Dataset
+import random
 
 import spacy
 import stanza
@@ -15,7 +16,7 @@ import logging
 from utils import *
 
 
-def load_reports(path):
+def load_metadata(path):
     reportFeatures = defaultdict(list)
 
     filenames = get_filenames(path)
@@ -45,6 +46,17 @@ def load_reports(path):
                 reportFeatures[feature].append(reportCategory.text)
 
     return pd.DataFrame(reportFeatures)
+
+
+def shuffle_metadata(metadata, seed=42):
+    random.seed(seed)
+
+    groups = [metadata for _, metadata in metadata.groupby('patient_id')]
+    random.shuffle(groups)
+
+    metadata = pd.concat(groups).reset_index(drop=True)
+
+    return metadata
 
 
 def load_images(metadata, image_path, resized=(224, 224)):

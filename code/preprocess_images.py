@@ -15,7 +15,8 @@ def main(args):
     REPORT_PATH = "./data/raw/reports"
     IMAGE_PATH = "./data/raw/images"
 
-    metadata = load_reports(REPORT_PATH)
+    metadata = load_metadata(REPORT_PATH)
+    shuffle_metadata(metadata, seed=42)
 
     if args.size > 0:
         metadata = metadata[:args.size]

@@ -43,7 +43,7 @@ def main(args):
     model_name = args.model
 
     logging.info("loading reports...")
-    metadata = load_reports(REPORT_PATH)
+    metadata = load_metadata(REPORT_PATH)
     reports = prepare_reports(metadata)
 
     logging.info("tokenizing...")

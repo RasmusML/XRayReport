@@ -63,7 +63,7 @@ def main(args):
     if model_name == "chex1":
         config = {
             "data": {
-                "size": 10,
+                "size": 300,
                 "preprocessed_images": "data/processed/chex1_images.pt",
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
@@ -109,12 +109,12 @@ def main(args):
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 10,
+                "epochs": 100,
                 "batch_size": 32,
-                "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=1e-5),
+                "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=0),
                 "weighted_loss": True,
-                "checkpoint_save_freq": 5,
-                "bleu_eval_freq": 5,
+                "checkpoint_save_freq": 50,
+                "bleu_eval_freq": 50,
                 "bleu_max_samples": 10,
             },
 
@@ -153,7 +153,9 @@ def main(args):
     model_config = config["model"]
 
     logging.info("loading reports...")
-    metadata = load_reports(REPORT_PATH)
+    metadata = load_metadata(REPORT_PATH)
+    shuffle_metadata(metadata, seed=42)
+    
     reports = prepare_reports(metadata)
 
     logging.info("tokenizing...")
