@@ -127,10 +127,10 @@ class CheXNetEncoder1(nn.Module):
     
 
 class CheXNetDecoder1(nn.Module):
-    def __init__(self, word_embeddings, hidden_size=256, freeze_embeddings=False):
+    def __init__(self, word_embeddings, hidden_size=512, freeze_embeddings=False):
         super().__init__()
 
-        self.linear1 = nn.Linear(1024, hidden_size)
+        self.max_pool = nn.MaxPool1d(2, stride=2)
 
         self.vocab_size = word_embeddings.shape[0]
         self.embedding_size = word_embeddings.shape[1]
@@ -139,19 +139,20 @@ class CheXNetDecoder1(nn.Module):
         self.lstm = nn.LSTM(self.embedding_size, hidden_size, batch_first=True, bidirectional=False)
         self.dropout = nn.Dropout(0.5)
 
-        self.linear2 = nn.Linear(2 * hidden_size, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.linear3 = nn.Linear(hidden_size, self.vocab_size)
 
     def forward(self, token_ids, context):
-        context = self.linear1(context)
-        context = context.unsqueeze(1).expand(-1, token_ids.shape[1], -1)
+        context = self.max_pool(context)
+
+        c0 = torch.zeros(1, token_ids.shape[0], self.lstm.hidden_size, device=token_ids.device)
+        h0 = context[None]
 
         token_ids = self.embed(token_ids)
-        token_ids, (hn, cn) = self.lstm(token_ids)
+        token_ids, (hn, cn) = self.lstm(token_ids, (h0, c0))
         token_ids = self.dropout(token_ids)
         
-        z = torch.cat([context, token_ids], dim=-1)
-        z = self.linear2(z)
+        z = self.linear2(token_ids)
         z = F.relu(z)
         z = self.linear3(z)
 
@@ -159,7 +160,7 @@ class CheXNetDecoder1(nn.Module):
 
 
 class CheXNet1(nn.Module):
-    def __init__(self, word_embeddings, hidden_size=256):
+    def __init__(self, word_embeddings, hidden_size=512):
         super().__init__()
 
         self.encoder = CheXNetEncoder1() # the encoder is pretrained (and we won't fine-tune it), so use the context directly for speed-ups
@@ -186,7 +187,7 @@ class CheXNet1(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=6, n_heads=8, hidden_dim=800, freeze_embeddings=True):
+    def __init__(self, pretrained_embeddings, context_dim=1024, n_layers=3, n_heads=4, hidden_dim=400, freeze_embeddings=True):
         super().__init__()
 
         assert n_layers >= 1
@@ -200,7 +201,9 @@ class TransformerDecoder(nn.Module):
         self.positional_encoding = PositionalEncoding(self.embedding_dim, dropout=0.1, max_len=5000)
         self.linear_dim_expand = nn.Linear(self.embedding_dim, self.hidden_dim)
         self.embedding = nn.Embedding.from_pretrained(torch.tensor(pretrained_embeddings, dtype=torch.float32), freeze=freeze_embeddings)
-        self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
+        self.decoder_layer1 = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, dropout=0.2, batch_first=True)
+
+        self.context_dropout = nn.Dropout(0.4)
 
         if self.n_layers > 1:
             self.decoder_layerN_type = MyTransformerDecoderLayer(qdim=self.hidden_dim, kdim=self.context_dim, vdim=self.context_dim, n_heads=n_heads, batch_first=True)
@@ -211,9 +214,11 @@ class TransformerDecoder(nn.Module):
     def forward(self, token_ids, context):
         mask = generate_square_subsequent_mask(token_ids.size(1)).to(token_ids.device)
 
+        context = self.context_dropout(context)
+
         x = self.embedding(token_ids)
         x = self.positional_encoding(x)
-        x = self.linear_dim_expand(x)
+        #x = self.linear_dim_expand(x)
         x = self.decoder_layer1(x, context, target_attn_mask=mask)
 
         if self.n_layers > 1:
@@ -242,7 +247,6 @@ class CheXTransformerNet(nn.Module):
         super().__init__()
 
         self.encoder = CheXNetEncoder2()
-        self.encoder_dropout = nn.Dropout2d(0.3)
         self.decoder = TransformerDecoder(pretrained_embeddings)
         
     def forward(self, text, context):
@@ -250,7 +254,7 @@ class CheXTransformerNet(nn.Module):
         return output
     
     def preprocess(self, images):
-        return process_to_fixed_context(self.encoder, self.encoder_dropout(images))
+        return process_to_fixed_context(self.encoder, images)
     
     def cached_emitter(self, context):
         def emitter(tokens):
@@ -444,6 +448,13 @@ class CheXTransformerNetOld(nn.Module):
 #
 # shared
 #
+
+def masked_loss(y_pred, y_true, ignore_index, loss_weights=None):
+    mask = (y_true != ignore_index).float()
+    loss = F.cross_entropy(y_pred, y_true, reduction="none", weight=loss_weights)
+    loss = loss * mask
+    return loss.sum() / mask.sum()
+
 
 def generate_square_subsequent_mask(sz):
     mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)

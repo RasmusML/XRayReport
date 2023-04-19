@@ -10,6 +10,10 @@ def plot_image(image):
     plt.imshow(image, cmap='gray')
     plt.axis('off')
 
+def plot_image_multichannel(image):
+    plt.imshow(image, cmap='gray')
+    plt.axis('off')
+
 
 def plot_images_2d(images, title=None, path=None):
     n_rows = images.shape[0]
