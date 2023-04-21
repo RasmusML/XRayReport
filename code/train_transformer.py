@@ -63,13 +63,12 @@ def main(args):
     if model_name == "chex1":
         config = {
             "data": {
-                "size": 300,
                 "preprocessed_images": "data/processed/chex1_images.pt",
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 10,
-                "batch_size": 32,
+                "epochs": 800,
+                "batch_size": 128,
                 "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=1e-5),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 5,
@@ -89,9 +88,9 @@ def main(args):
                 "split": [0.8, 0.1, 0.1] # train, validation, test
             },
             "training": {
-                "epochs": 300,
-                "batch_size": 16,
-                "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=0),
+                "epochs": 3800,
+                "batch_size": 128,
+                "optimizer": lambda params: optim.Adam(params, lr=1e-4, weight_decay=1e-4),
                 "weighted_loss": True,
                 "checkpoint_save_freq": 100,
                 "bleu_eval_freq": 50,

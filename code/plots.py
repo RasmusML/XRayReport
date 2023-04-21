@@ -150,3 +150,12 @@ def plot_losses(train_losses, validation_losses):
     ax.legend()
     ax.grid()
     plt.show()
+
+
+def overlay_attention(image, attention_mask, alpha=0.45):
+    normalized_attn = image_attention_mask / image_attention_mask.max()
+    xray_plotable_3 = np.stack([xray_plotable] * 3, axis=2)
+    xray_plotable_3[:,:,0] = xray_plotable_3[:,:,0] * (1 - alpha) + normalized_attn * alpha * 0
+    xray_plotable_3[:,:,1] = xray_plotable_3[:,:,1] * (1 - alpha) + normalized_attn * alpha
+    xray_plotable_3[:,:,2] = xray_plotable_3[:,:,2] * (1 - alpha) + normalized_attn * alpha * 0
+    return xray_plotable_3
